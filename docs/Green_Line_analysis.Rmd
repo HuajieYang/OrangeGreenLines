@@ -1,0 +1,199 @@
+---
+title: "Green_Line_analysis"
+date: "10/3/2019"
+output: html_document
+---
+<style>
+    body .main-container {
+        max-width: 1100px;
+    }
+</style>
+
+# Setting 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+options(scipen=100)
+options(digits=3)
+
+if (!require("pacman")) {install.packages("pacman"); library(pacman)}
+p_load(dplyr, lubridate, ggplot2, stargazer, stringr)
+```
+
+```{r}
+# Weather data 
+# 1803651 location: PORTLAND INTERNATIONAL AIRPORT, OR US （45.5958	-122.6093）
+# 1803661 location: PORTLAND WEATHER FORECAST OFFICE, OR US （(45.5605	-122.5383)
+
+wd1 <- read.csv("data/weather/1803651.csv", stringsAsFactors = F) %>% 
+      select(date=DATE, PRCP, TMAX, TMIN, TAVG)  %>% 
+      mutate(date=as.Date(date),
+             TMAX90=ifelse(TMAX>90, 1,0))
+
+load("output/intermediate/data_15min_0414_green_wdpeak.RData")
+
+data_15min_0414_green_wdpeak <- data_15min_0414_green_wdpeak %>%
+                                left_join(wd1, by=c("date"))  %>%
+                                mutate(PRCP=as.numeric(PRCP))
+```
+
+# 15-min interval at the station level 
+```{r}
+# DID regression 
+  sp_amo_station_15 <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                          data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+  
+  sp_ami_station_15 <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                          data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+  
+  sp_pmo_station_15 <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                          data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+  
+  sp_pmi_station_15 <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                          data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+  
+  stargazer(sp_amo_station_15, sp_ami_station_15, sp_pmo_station_15, sp_pmi_station_15, 
+            column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+            dep.var.labels=c("Travel Speed"),
+            covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                               "Time Period × Group"),
+            type="text", out="output/intermediate/gl_station_15min_sp.htm")
+
+# Add weather data 
+  sp_amo_station_15_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group,  
+                                  data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+  
+  sp_ami_station_15_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                  data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+  
+  sp_pmo_station_15_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                  data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+  
+  sp_pmi_station_15_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                  data=data_15min_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+  
+  stargazer(sp_amo_station_15_weather, sp_ami_station_15_weather, sp_pmo_station_15_weather, sp_pmi_station_15_weather, 
+            column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+            dep.var.labels=c("Travel Speed"),
+            covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Precipitation", "Temperature over 90",
+                               "Time Period × Group"),
+            type="text", out="output/intermediate/gl_station_15min_sp.htm")
+  
+
+```
+
+# Aggregate to AM/PM peak period at station level 
+```{r}
+data_station_day_0414_green_wdpeak <- data_15min_0414_green_wdpeak %>%
+                                      group_by(highwayid, stationid, date, AM_PM) %>%
+                                      summarise(speed=mean(speed, na.rm=TRUE),
+                                                volume=mean(volume, na.rm=TRUE),
+                                                before_after=first(before_after),
+                                                ec_group=first(ec_group),
+                                                PRCP=first(PRCP),
+                                                TMAX90=first(TMAX90)) %>% 
+                                      ungroup() 
+
+
+# highwayid 1 I-5 North / highwayid 2 I-5 South 
+# highwayid 3 I-205 North / highwayid 4 I-205 South
+# highwayid 7 I-84 East/ highwayid 8 I-84 West 
+sp_amo_station_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+
+sp_ami_station_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+
+sp_pmo_station_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+
+sp_pmi_station_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+
+
+stargazer(sp_amo_station_day, sp_ami_station_day, sp_pmo_station_day, sp_pmi_station_day, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text", out="output/intermediate/gl_station_day_sp.htm")
+
+sp_amo_station_day_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+
+sp_ami_station_day_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                 data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+
+sp_pmo_station_day_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+
+sp_pmi_station_day_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                                data=data_station_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+
+
+stargazer(sp_amo_station_day_weather, sp_ami_station_day_weather, sp_pmo_station_day_weather, sp_pmi_station_day_weather, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Precipitation", "Temperature over 90",
+                             "Time Period × Group"),
+          type="text", out="output/intermediate/gl_station_day_sp_weather.htm")  
+```
+
+# aggregate to AM/PM peak periods at corridor level 
+```{r}
+# Aggregate 15-minute data to daily datat: the percentage of NA decareases from 3.81% to 0.07% 
+data_corridor_day_0414_green_wdpeak <- data_15min_0414_green_wdpeak %>%
+                                        group_by(highwayid, date, AM_PM) %>%
+                                        summarise(speed=mean(speed, na.rm=TRUE),
+                                                  volume=mean(volume, na.rm=TRUE),
+                                                  before_after=first(before_after),
+                                                  ec_group=first(ec_group),
+                                                  PRCP=first(PRCP),
+                                                  TMAX90=first(TMAX90)
+                                                  ) %>% 
+                                        ungroup() 
+
+# highwayid 1 I-5 North / highwayid 2 I-5 South 
+# highwayid 3 I-205 North / highwayid 4 I-205 South
+# highwayid 7 I-84 East/ highwayid 8 I-84 West 
+sp_amo_corridor_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+
+sp_ami_corridor_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+
+sp_pmo_corridor_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+
+sp_pmi_corridor_day <- lm(speed ~ before_after + ec_group + before_after*ec_group, 
+                         data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+
+stargazer(sp_amo_corridor_day, sp_ami_corridor_day, sp_pmo_corridor_day, sp_pmi_corridor_day, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text", out="output/intermediate/gl_corridor_day_sp.htm")
+
+sp_amo_corridor_day_weather <- lm(speed ~ before_after  + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                          data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(2, 4, 7)))
+
+sp_ami_corridor_day_weather <- lm(speed ~ before_after  + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                          data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="AM", highwayid %in% c(1, 3, 8)))
+
+sp_pmo_corridor_day_weather <- lm(speed ~ before_after  + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                          data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(2, 4, 7)))
+
+sp_pmi_corridor_day_weather <- lm(speed ~ before_after + ec_group + PRCP + TMAX90 + before_after*ec_group, 
+                          data=data_corridor_day_0414_green_wdpeak %>% filter(AM_PM=="PM", highwayid %in% c(1, 3, 8)))
+
+stargazer(sp_amo_corridor_day_weather, sp_ami_corridor_day_weather, sp_pmo_corridor_day_weather, sp_pmi_corridor_day_weather, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Precipitation", "Temperature over 90",
+                             "Time Period × Group"),
+          type="text", out="output/intermediate/gl_corridor_day_sp_weather.htm")
+
+
+```
+

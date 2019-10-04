@@ -1,0 +1,324 @@
+---
+title: "Corridor_level_paper"
+output: html_document
+---
+
+<style>
+    body .main-container {
+        max-width: 1100px;
+    }
+</style>
+
+# Setting 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+options(scipen=100)
+options(digits=3)
+
+if (!require("pacman")) {install.packages("pacman"); library(pacman)}
+p_load(dplyr, lubridate, ggplot2, stargazer, stringr)
+```
+
+# Abstract
+In the context of increasing daily traffic congestion and auto dependence, light rail transit (LRT) has been suggested as an effective means to reduce auto dependence and relieve traffic congestion. Between 1999 and 2017, nationwide vehicle revenue hours of LRT service has increased from 3.1 million to 7.5 million (NTD, 2000, 2018). There is a growing body of literature investigating the effects of LRT on transit ridership and traffic congestion, but so far previous research has failed to systematically evaluate the short- and long-term effects due to lack of consistent high resolution historical data. Most existing studies have to convert annual average daily traffic as approximate measurements of traffic congestion (Bhattacharjee and Goetz, 2012; Ewing et al., 2014), but such measurements cannot reveal daily or monthly variation in traffic congestion. Emerging high resolution archival transportation data provide a potential opportunity to tackle the problem (Giuliano et al., 2015).  
+
+This study utilizes transit boarding data and high resolution historical traffic information from archival databases and iPeMS to comprehensively investigate the short- and long-term effects of LRT at the corridor level with case studies of two LRT lines in Portland, OR region. Using a quasi-experiment design, we estimate the effects of LRT on transit ridership and traffic delay and reliability with high-resolution transit and travel time data over a longer time period than existing studies.  For each LRT line, we first compare transit ridership and traffic condition before and after its opening and then estimate difference-in-difference regression models to examine its effects. Both LRT lines increased transit ridership in the short- and long-term, and relieved traffic congestion in the short-term, while having no significant effect on traffic congestion in the long-term due to induced traffic demand. The effects of LRT varied by LRT lines because of local land use and transportation system. In addition to contributing to the literature on the effects of transit, this study demonstrates how high-resolution archival transportation data enable analyses that were previously impossible. The growing availability of transportation data of high temporal and spatial resolution over a long time period provides a unique opportunity to evaluate the effects of transportation policies and projects like LRT and their evolution, which helps to explain the seemingly conflicting empirical results in existing studies and therefore provides an improved understanding of the effects. 
+
+# Methodology 
+
+
+# Analysis 
+
+```{r}
+# Prepare data 
+# source("code/Orange_line_prepare_data.R")
+load("output/intermediate/data_combined_day_wdpeak.RData")
+```
+
+## Freeway average speed and standard deviation 
+To investigate the effect of the Orange Line on traffic congestion, as illustrated above, this study examines travel speed and travel time reliability. 
+
+### Impact on speed 
+Investigating the daily average freeway corridor (experimental and control roadway) speed by peak period (AM and PM peak) and directions (inbound to/outbound from CBD) as dependent variable, the following table shows the results of  Difference-in-difference (DID) regression model. Of the four models, compared to the control freeway segment and pre-operation period, the coefficients of DID estimators indicite significant relarive increase in speed of experiment roadway in all cases. This indicates that the Green Line has a relief effect on freeway traffic congestion within its service corridor. 
+
+```{r}
+# AM outward CBD
+sp_amo_day_fwy <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group,
+                     data=data_combined_day_wdpeak %>% 
+                          filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+sd_amo_day_fwy <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group,
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+# AM Peak inward CBD
+sp_ami_day_fwy <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                     filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="AM"))
+
+sd_ami_day_fwy <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="AM"))
+
+# PM Peak outward CBD
+sp_pmo_day_fwy <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                     filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="PM"))
+
+sd_pmo_day_fwy <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="PM"))
+
+# PM Peak inward CBD
+sp_pmi_day_fwy <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                    data=data_combined_day_wdpeak %>% 
+                    filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="PM"))
+
+sd_pmi_day_fwy <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="PM"))
+
+stargazer(sp_amo_day_fwy, sp_ami_day_fwy, sp_pmo_day_fwy, sp_pmi_day_fwy, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text", out="output/intermediate/ol_fwy_day_sp.htm")
+
+
+```
+sta
+If the Orange Line improves traffic condition on freeway, the travel time reliabilty, measured by the standard deviation of freeway speed, should decrease. Using the SD of corridor freeway as unit of analysis, the DID estimation reveals two significant relative decrease ( and 0.358 respectively) in SD of freeway speed of experimental freeway segment in outward from CBD direction during AM peak period (-0.730) and in inward to CBD direction during PM peak peiord (-0.358). One coefficient of DID estimator is positive and significant (AM inward to CBD). The results suggest some positive impacts of the Green Line on arterials.   
+
+
+?/"day-to-day variation"
+```{r}
+stargazer(sd_amo_day_fwy, sd_ami_day_fwy, sd_pmo_day_fwy, sd_pmi_day_fwy, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text")
+```
+
+
+## Arterial average speed and standard deviation 
+With the operation of the MAX Green Line, the traffic congestion would have been relieved. I select two segments of two major arterials, SE Dividion St and Holgate Blvd, respectively as control segments. A segment of a major arterialm, SE Milwaukie Ave as experimental segment. 
+
+The control segments run vertical to the Green Line and hense they are not subject to the impacts of the Green Line.
+
+"(traffic information (e.g. weekday peak-period traffic volumes ### vehiclesl/lane/hour)) of both control and experimental arterials."
+
+The experimental segment is generally paralle to the Greeen Line. (use similar writing from the Paper on Denver)
+
+
+
+### Impact on speed
+Using average weekday peak-period arterial speed as dependent varialbe, the results of the DID regression models for the two peak periods and two directions are shown in the following table. The DID estimation suggests a statistically significant increase (0.855/0) in speed for PM peak outward from CBD. This suggests some positive impact of the Green Line. 
+The DID estimator coefficient for AM peak outward from CBD is statistially significant and negative (-0.605) (how to explain.) Absoluates values of the DID estimaror coefficients are relative small compared to those of the DID models for the freeways. This suggests that the Green Line had a larger impact on freeways than on the arterials. 
+
+
+
+```{r}
+# AM outward CBD
+sp_amo_day_atr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
+
+sd_amo_day_atr <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
+
+# AM inward CBD
+sp_ami_day_atr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
+
+sd_ami_day_atr <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
+
+# PM Peak outward CBD
+sp_pmo_day_atr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+sd_pmo_day_atr <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+# PM Peak inward CBD
+sp_pmi_day_atr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="PM"))
+
+sd_pmi_day_atr <- lm(SDSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% 
+                       filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="PM"))
+
+stargazer(sp_amo_day_atr, sp_ami_day_atr, sp_pmo_day_atr, sp_pmi_day_atr, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text")
+
+```
+
+Using SD of average arterial speed as dependent variable, the second set of DID regression models for arterials are estimated. The DID estimator coefficients suggest significant increase in variation in speed for AM peak outward to CBD, PM peak outward to CBD, PM peak inwar to CBD.  
+
+## Buffer time analysis
+
+```{r}
+stargazer(sd_amo_day_atr, sd_ami_day_atr, sd_pmo_day_atr, sd_pmi_day_atr, 
+          column.labels = c("AM Outward", "AM Inward", "PM Outward",  "PM Inward"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "Time Period × Group"),
+          type="text")
+```
+
+# Plots 
+
+
+## Freeways
+```{r}
+PFW_AM_OB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="AM", roadway %in% c("McLoughlin_S", "Powell_E")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(0, 50) + ggtitle("Outbound from CBD speed for AM peak")+
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("McLoughlin_S", "Powell_E"),
+                      labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("McLoughlin_S", "Powell_E"),
+                        labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)"))  
+PFW_AM_OB
+ggsave(filename = "output/plots/PFW_AM_OB.png", PFW_AM_OB, width = 8, height = 4)
+
+PFW_AM_IB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="AM", roadway %in% c("McLoughlin_N", "Powell_W")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(0, 50) + ggtitle("Inbound to CBD speed for AM peak")+
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("McLoughlin_N", "Powell_W"),
+                      labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("McLoughlin_N", "Powell_W"),
+                        labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)"))  
+PFW_AM_IB
+ggsave(filename = "output/plots/PFW_AM_IB.png", PFW_AM_IB, width = 8, height = 4)
+
+PFW_PM_OB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="PM", roadway %in% c("McLoughlin_S", "Powell_E")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+             geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+             geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(0, 50) + ggtitle("Outbound from CBD speed for PM peak")+
+             labs( x="Date", y="Average speed (mph)") +
+             theme(plot.title = element_text(hjust = 0.5))+ 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("McLoughlin_S", "Powell_E"),
+                      labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("McLoughlin_S", "Powell_E"),
+                        labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)"))  
+PFW_PM_OB
+ggsave(filename = "output/plots/PFW_PM_OB.png", PFW_PM_OB, width = 8, height = 4)
+
+PFW_PM_IB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="PM", roadway %in% c("McLoughlin_N", "Powell_W")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(0, 50) + ggtitle("Inbound to CBD speed for PM peak")+
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("McLoughlin_N", "Powell_W"),
+                      labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("McLoughlin_N", "Powell_W"),
+                        labels=c("McLoughlin Blvd (Experimental)", "Powell Blvd (Control)"))  
+PFW_PM_IB
+ggsave(filename = "output/plots/PFW_PM_IB.png", PFW_PM_IB, width = 8, height = 4)
+
+```
+
+
+## Arterials 
+```{r}
+PAT_AM_IB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="AM", roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N")), 
+             aes(x=date, y=AvgSpeed, group=roadway)) +
+             geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+             geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(5, 30) + ggtitle("Inbound to CBD speed for AM peak")+
+             labs( x="Date", y="Average speed (mph)") +
+             theme(plot.title = element_text(hjust = 0.5))+ 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("Division_W", "Holgate_W", "Milwaukie_17th_N"),
+                      labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("Division_W", "Holgate_W", "Milwaukie_17th_N"),
+                        labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)"))  
+PAT_AM_IB
+ggsave(filename = "output/plots/PAT_AM_IB.png", PAT_AM_IB, width = 8, height = 4)
+
+PAT_AM_OB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="AM", roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(5, 30) + ggtitle("Outbound from CBD for AM peak")+
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("Division_E", "Holgate_E", "Milwaukie_17th_S"),
+                      labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("Division_E", "Holgate_E", "Milwaukie_17th_S"),
+                        labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)"))  
+PAT_AM_OB
+ggsave(filename = "output/plots/PAT_AM_OB.png", PAT_AM_OB, width = 8, height = 4)
+
+PAT_PM_IB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="PM", roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N")), 
+             aes(x=date, y=AvgSpeed, group=roadway)) +
+             geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+             geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(5, 30) + ggtitle("Inbound to CBD speed for PM peak")+
+             labs( x="Date", y="Average speed (mph)") +
+             theme(plot.title = element_text(hjust = 0.5))+ 
+             scale_colour_discrete(name="Roadways",
+                                breaks=c("Division_W", "Holgate_W", "Milwaukie_17th_N"),
+                                labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)")) +
+             scale_linetype_discrete(name="Roadways",
+                                  breaks=c("Division_W", "Holgate_W", "Milwaukie_17th_N"),
+                                  labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)"))  
+PAT_PM_IB
+ggsave(filename = "output/plots/PAT_PM_IB.png", PAT_PM_IB, width = 8, height = 4)
+
+
+PAT_PM_OB <- ggplot(data=data_combined_day_wdpeak %>% filter(AM_PM=="PM", roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S")), 
+                    aes(x=date, y=AvgSpeed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2015-09-12"), size=0.5) +  ylim(5, 30) + ggtitle("Outbound from CBD for PM peak period")+
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  scale_colour_discrete(name="Roadways",
+                      breaks=c("Division_E", "Holgate_E", "Milwaukie_17th_S"),
+                      labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie & 17th Ave (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                        breaks=c("Division_E", "Holgate_E", "Milwaukie_17th_S"),
+                        labels=c("Division St (Control)", "Holgate St (Control)", "Milwaukie Ave & 17th (Experimental)"))  
+PAT_PM_OB
+ggsave(filename = "output/plots/PAT_PM_OB.png", PAT_PM_OB, width = 8, height = 4)
+```
+
+
+
+
+
+
+
+
+
+
+
+

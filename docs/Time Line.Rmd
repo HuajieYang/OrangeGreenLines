@@ -1,0 +1,21 @@
+---
+title: "Time Line"
+author: "Huajie Yang"
+date: "9/7/2019"
+output: html_document
+---
+
+# ~ 09/08 
+ 1. Arterial and Freeway regression analysis 
+ 2. Plots of changes over time 
+
+Note: repair or construction activities on roadways information; traffic incidents;  changes in signalization; daily Green Line ridership read Giuliano's paper again and again.  
+
+# 09/16 -   09/22 
+1. transit analysis
+2. revise writing 
+3. green line analysis 
+
+
+# Notes
+My contribution: long time periods; local circumatance; 
