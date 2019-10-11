@@ -1,1009 +1,448 @@
-# Load travel time and speed data 
-getwd()
-test <- read.delim("data/Travel time and speed/SE Division St (E).txt", sep = "\t")
-head(test, 100)
-str(test)
+# Station analysis ====
+
+# Metadata 
+detector_meta <- read.csv("data/metadata/detectors_metadata.csv", stringsAsFactors = F) # detector metadata
+stations_meta <- read.csv("data/metadata/stations_metadata.csv", stringsAsFactors = F) # station metadata
+highways_meta <- read.csv("data/metadata/highways_metadata.csv", stringsAsFactors = F) # highway metadata 
+
+# Identify stationids ====
+# I-84
+# good on I-84:1055, 1056, 1057, 1059, 1060, 1061, 1062, 1127
+# outside of experimental zone: 1058, 1097, 1145 (it is not ramp but looks like a ramp) 
+# ramp stations (5000) with lat&lon: 5061, whose lat&lon is far away from the freeway
+stations_I84 <- stations_meta %>% 
+  filter(highwayid %in% c(7, 8), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date) %>% 
+  filter(stationid %in% c(1055, 1056, 1057, 1059, 1060, 1061, 1062, 1127))  %>% 
+  arrange(stationid)
+
+write.csv(stations_I84, file="output/intermediate/stations_I84.csv",row.names=FALSE)
+
+# I-205
+# highway id for I-205: 3, 4
+# good on I-205 within experimental zone: lat&lon of 1142 is a little far away from the freeway
+# Outside of experimental zone: lat <= 45.42950 (stationid 1124), lat >= 45.56085 (stationid 1141)
+# ramp stations (5000) with lat&lon: 5126, 5098, whose lat&lon is far away from the freeway
+stations_I205 <- stations_meta %>% 
+  filter(highwayid %in% c(3, 4), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid,lat, lon, highwayid, locationtext, start_date, end_date) %>%
+  filter(!is.na(lat) & (lat > 45.4296 & lat < 45.5608) & stationid<5000)  %>%
+  arrange(stationid)
+
+# highway id for  I-5: 1, 2
+# Outside of experimental zone: lat <= 45.37870 (stationid 1040), lat >= 45.51715 (stationid 1016)
+# 3114 and 3197 are not included in data_5min 
+stations_I5 <- stations_meta %>% 
+  filter(highwayid %in% c(1, 2), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date)%>%
+  filter(!is.na(lat)&(lat < 45.5171 & lat > 45.3788))  %>%
+  arrange(stationid)
+
+stations_green <- rbind(stations_I84, stations_I205, stations_I5)
+
+# Check 
+# Previous filter conditions may not work well; it'd better use GIS and CSV file
+# After checking GIS map, previous station I-205 filter work well.
+
+# The upstream and downstream stations are related 
+test <- stations_meta %>%
+        filter(stationid %in% c(1143, 1051, 1052, 1053, 1054, 1098), highwayid==4) # , start_date=="2004-01-01 00:00:00-08"
+
+# Test long-term effect 
+load("output/intermediate/data_combined_day_wdpeak.RData")
+head(data_combined_day_wdpeak)
 
 
-22-3
-nrow(data_5min)
-
-nchar("2009-03-12 10:00:00-07")
-
-substr("2009-03-12 10:00:00-07", nchar("2009-03-12 10:00:00-07")-1, nchar("2009-03-12 10:00:00-07"))
-
-substr("2009-03-12 10:00:00-07", 1, nchar("2009-03-12 10:00:00-07")-3)
+# Get historical mean speed or speed limit/early morning speed 
+# Speed limit may change over time 
+summary(data_combined_5)
 
 
-test <- data_5min %>%
-        mutate(timezone=substr(starttime, nchar(starttime)-1, nchar(starttime)))
+test <-  data_combined_5 %>%
+  mutate(date_time=mdy_hm(X5.Minutes),
+         date=as.Date(date_time),
+         TTime=as.numeric(Avg.Travel.Time..mins.),
+         AvgSpeed=as.numeric(Average.Speed..mph.)) %>%
+  filter(date > "2012-09-11", date < "2018-09-12") %>%
+  mutate(day_week=weekdays(date),
+         before_after=ifelse(date < ymd("2015-09-12"), 0, 1),
+         time_hour=hour(date_time),
+         min5=minute(date_time),
+         min15=ifelse(min5 %in% c(0,  5,  10), 1, NA),
+         min15=ifelse(min5 %in% c(15, 20, 25), 2, min15),
+         min15=ifelse(min5 %in% c(30, 35, 40), 3, min15),
+         min15=ifelse(min5 %in% c(45, 50, 55), 4, min15),
+         AM_PM=ifelse(time_hour %in% c(7, 8, 9), "AM", "NonPeak"), 
+         AM_PM=ifelse(time_hour %in% c(16, 17, 18), "PM", AM_PM),
+         ec_group=ifelse(roadway %in% c("Powell_E", "Powell_W", "Holgate_E", "Holgate_W", "Division_E", "Division_W"), 
+                         "control", "experimental"),
+         direction=ifelse(roadway %in% c("Division_E", "Holgate_E", "McLoughlin_S", 
+                                         "Milwaukie_17th_S", "Powell_E"), "Outbound", "Inbound")
+  ) 
+nrow(test)
+nrow
 
-head(test)
-table(test$timezone)
-max(data_I84$date)
-
-data_I84 %>% filter(date=="2009-11-01")
-
-
-
-data_I84[350:400, ]
-
-summary(data_I84)
-test <- data_5min %>%
-  filter(stationid %in% stations_I84$stationid)
-summary(test)
-
-table(data_I84$detectorid)
-table(data_I84$time_hour)
-table(data_I84$AM_PM)
-
-
-head(data_5min_0405_green)
-
-
-data_5min_0405_green %>%
-  arrange()
-
-data_5min_0405_green[1:100, ]
-
-
-head(data_5min_0405_green)
-tail(data_5min_0405_green)
-
-
-head(data_5min_0607_green)
-tail(data_5min_0607_green)
-
-
-ls(data_5min_0405_green)
-
-head(data_5min_0405_green)
-
-
-
-
-
-object.size(data_5min_0405_green)
-
-
-
-
-
-test <- data_5min_0405_green %>%
-        select(detector_id, starttime, volume, speed, occupancy, countreadings, vmt, vht, delay, traveltime, resolution)
-object.size(test)
-
-
-
-# 0405 dataset 
-# Analysze travel speed data 
-# Identify highwayid, stationid, lanenumber for each detector
-detector_meta_sub <- detector_meta %>%
-  select(highwayid, stationid, detectorid, lanenumber) %>% 
-  rename(detector_id=detectorid) %>%
-  semi_join(data_5min_o) %>% 
-  arrange(highwayid, stationid, detector_id, lanenumber)
-
-data_5min <- data_5min_o %>%
-  left_join(detector_meta_sub) %>%
-  rename(detectorid=detector_id) 
-
-head()
-
-
-
-
-
-
-length(unique(data_5min_0506_green$detector_id))
-length(unique(data_5min_0405_green$detector_id))
-length(unique(data_5min_0607_green$detector_id))
-length(unique(data_5min_0708_green$detector_id))
-
-ls()
-
-head(data_5min_0506)
-
-
-head(data_5min_0506_green)
-
-
-## 0405 analysis 
-test <- data_5min_0405_green %>%
-        filter(stationid %in% stations_I84$stationid)  %>%
-        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), # 07/08 means DST changes which does not affect analysis
-               date=as.Date(starttime),
-               day_week=weekdays(date),
-               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-               time_hour=hour(date_time),
-               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), # the peak period is defined the same as commuting time 
-               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-        ) %>%
-        select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-        mutate(ec_group="experimental")
-
-
-
-head(test)
-
-min(test$date)
-summary(test)
-str(test)
-
-
+table(data_combined_5$Avg.Travel.Time..mins.)
 
 test1 <- test %>%
-         select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week)
+         filter(is.na(AvgSpeed)) %>%
+         mutate(id=paste(X5.Minutes, roadway, sep="_"))
+
+table(test1$Avg.Travel.Time..mins.)
+
 head(test1)
-
-table(test1$date)
-
-test1 %>% filter(date == "2005-09-11")
-
-## 
-
-test <- data_5min_0506_green %>%
-        filter(stationid %in% stations_I84$stationid)  %>%
-        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), # 07/08 means DST changes which does not affect analysis
-               date=as.Date(starttime),
-               day_week=weekdays(date),
-               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-               time_hour=hour(date_time),
-               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), # the peak period is defined the same as commuting time 
-               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-        ) %>%
-        select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-        mutate(ec_group="experimental")
-
-
-test1 <- test %>%
-         select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week)
-
-table(test1$date)
-
-test1 %>% filter(date == "2006-09-12")
-
-
-
-
-
-stations_I84_1 <- stations_meta %>% 
-                  filter( start_date=="2004-01-01 00:00:00-08") %>% 
-                  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date) %>% 
-                  filter(stationid %in% c(1055, 1056, 1057, 1059, 1060, 1061, 1062, 1127))  %>% 
-                  arrange(stationid)
-
-head(data_5min_0405_green)
-head(data_5min_0506_green)
-
-
-
-data_5min_0405_green <- data_5min_0405_green %>%
-                        filter(stationid %in% stations_I84$stationid)  %>%
-                        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), # 07/08 means DST changes which does not affect analysis
-                               date=as.Date(starttime),
-                               day_week=weekdays(date),
-                               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                               time_hour=hour(date_time),
-                               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), # the peak period is defined the same as commuting time 
-                               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-                        ) %>%
-                        select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-                        mutate(ec_group="experimental")
-
-max(data_5min_0405_green$date)
-
-
-
-data_5min_0405_green %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week)  %>%
-    filter(date == "2005-09-12", detector_id==1425)
-
-data_5min_0506_green %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week)  %>%
-  filter(date == "2005-09-12", detector_id==1425)
-
-
-table(data_5min_0607_green$starttime)
-table(data_5min_0708_green$starttime)
-table(data_5min_0809_green$starttime)
-table(data_5min_0910_green$starttime)
-table(data_5min_1011_green$starttime)
-table(data_5min_1112_green$starttime)
-table(data_5min_1213_green$starttime)
-table(data_5min_1314_green$starttime)
-
-min(data_5min_0506_green$date)
-
-
-
-
-data_5min_0406_green <- rbind(data_5min_0405_green, data_5min_0506_green)
-
-head(data_5min_0506_green)
-
-
-
-
-
-
-table(data_5min_0506_green_1$date)
-
-
-
-
-data_5min_0506_green_1 <- data_5min_0506_green %>%
-                          mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), # 07/08 means DST changes which does not affect analysis
-                                 date=as.Date(starttime),
-                                 day_week=weekdays(date),
-                                 before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                                 time_hour=hour(date_time),
-                                 AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), # the peak period is defined the same as commuting time 
-                                 AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-                          ) %>%
-                          select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                          arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-                          mutate(ec_group="experimental")
-        
-
-
-
-str(data_5min_0506_green)
-
-test3 <- data_5min_0506_green_1 %>% filter(date=="2006-09-12")
-nrow(test3)
-test2 <- data_5min_0506_green %>% filter(starttime=="2006-09-12 00:00:00-07")
-nrow(test2)
-
-nrow(data_5min_0506_green)
-nrow(data_5min_0506_green_1)
-
-
-
-data_5min_0405_green %>% filter(starttime=="2005-09-12 00:00:00-07")
-
-
-
-data_5min_0405_green <- data_5min_0405_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), # 07/08 means DST changes which does not affect analysis
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), # the peak period is defined the same as commuting time 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-table(data_5min_0405_green$date)
-
-
-data_5min_0506_green <- data_5min_0506_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-
-
-data_5min_0607_green <- data_5min_0607_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-data_5min_0708_green <- data_5min_0708_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-
-data_5min_0809_green <- data_5min_0809_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-data_5min_0910_green <- data_5min_0910_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-
-data_5min_1011_green <- data_5min_1011_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-data_5min_1112_green <- data_5min_1112_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-data_5min_1213_green <- data_5min_1213_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-data_5min_1314_green <- data_5min_1314_green %>%
-  mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-         date=as.Date(starttime),
-         day_week=weekdays(date),
-         before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-         time_hour=hour(date_time),
-         AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-         AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM)
-  ) %>%
-  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-  arrange(highwayid, stationid, lanenumber, detector_id, date_time)  %>%
-  mutate(ec_group="experimental")
-
-
-
-
-data_5min_0414_green <- rbind(data_5min_0405_green, data_5min_0506_green, data_5min_0607_green, data_5min_0708_green,
-                              data_5min_0809_green, data_5min_0910_green, data_5min_1011_green, data_5min_1112_green,
-                              data_5min_1213_green, data_5min_1314_green)
-
-
-length(unique(data_5min_0405_green$detector_id))
-length(unique(data_5min_0506_green$detector_id))
-length(unique(data_5min_0607_green$detector_id))
-length(unique(data_5min_0708_green$detector_id))
-length(unique(data_5min_0809_green$detector_id))
-length(unique(data_5min_0910_green$detector_id))
-length(unique(data_5min_1011_green$detector_id))
-length(unique(data_5min_1112_green$detector_id))
-length(unique(data_5min_1213_green$detector_id))
-length(unique(data_5min_1314_green$detector_id))
-
-
-sort(unique(data_5min_0405_green$detector_id))==sort(unique(data_5min_0506_green$detector_id))
-sort(unique(data_5min_0506_green$detector_id))==sort(unique(data_5min_0607_green$detector_id))
-sort(unique(data_5min_0607_green$detector_id))==sort(unique(data_5min_0708_green$detector_id))
-sort(unique(data_5min_0708_green$detector_id))
-sort(unique(data_5min_0809_green$detector_id))
-sort(unique(data_5min_0910_green$detector_id))
-sort(unique(data_5min_1011_green$detector_id))
-sort(unique(data_5min_1112_green$detector_id))
-sort(unique(data_5min_1213_green$detector_id))
-sort(unique(data_5min_1314_green$detector_id))
-
-
-# Check detector ids in each year
-head(data_5min_0405_green %>% arrange(starttime))
-tail(data_5min_0405_green)
-table(data_5min_0405_green$date) 
-table(data_5min_0506_green$date)
-table(data_5min_0607_green$date)
-table(data_5min_0708_green$date)
-table(data_5min_0809_green$date)
-table(data_5min_0910_green$date)
-table(data_5min_1011_green$date)
-table(data_5min_1112_green$date)
-table(data_5min_1213_green$date)
-table(data_5min_1314_green$date)
-
-
-
-data_5min_0405_green %>% 
-                filter(date=="2005-09-12") %>% 
-                select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date)
-
-data_5min_0506_green %>% 
-              filter(starttime=="2005-09-12 00:00:00-07") %>% 
-              select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date)
-
-
-length(unique(data_5min_0405_green$detector_id))
-length(unique(data_5min_0506_green$detector_id))
-
-
-data_5min_0506_green %>% 
-              filter(date=="2006-09-12") %>% 
-              select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date)
-
-data_5min_0607_green %>% 
-              filter(starttime=="2006-09-12 00:00:00-07") %>% 
-              select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date)
-
-length(unique(data_5min_0506_green$detector_id))
-
-
-head(data_5min_0405)
-
-
-table(data_5min_0405$resolution)
-
-
-
-test <- data_5min_0607_green %>%
-        filter(detector_id==1949)
-
-head(test)
-head(data_5min_0607_green)
-
-str(data_5min_0607_green)
-
-
-
-
-head(detector_meta)
-
-
-
-detector_meta %>% filter(detectorid==1949)
-
-
-head(data_5min_0405_green)
-
-data_5min_0405_green %>% filter(detector_id==1949)
-
-
-
-head(data_5min_0405)
-
-
-data_5min_0405 %>% filter(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955, 
-                                             100369, 100370, 100374, 100375, 100376, 100435, 100436, 100437))
-
-
-head(data_5min_0405)
-
-
-data_5min_0607 %>% filter(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955, 
-                                             100369, 100370, 100374, 100375, 100376, 100435, 100436, 100437))
-
-test <- data_5min_0607_green %>% 
-        filter(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955, 
-                                  100369, 100370, 100374, 100375, 100376, 
-                                  100435, 100436, 100437)) %>% 
-        arrange(detector_id, starttime)
-
-head(test)
-table(test$starttime) 
-
-head(data_5min_0405_green)
-
-
-object.size(data_5min_0414_green)
-
-
-data_5min_0405_green <- data_5min_0405_green%>%
-                        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                               date=as.Date(starttime),
-                               day_week=weekdays(date),
-                               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                               time_hour=hour(date_time),
-                               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")
-                               ) %>%
-                        select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, 
-                               date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
-
-
-data_5min_0405_green %>% 
-               group_by(highwayid) %>% 
-               summarise(freq=n(), 
-                         ec_group=first(ec_group)) 
-
-
-table(data_5min_0405_green$before_after)
-
-
-summary(data_5min_0405_green)
-
-head(data_5min_0405_green)
-
-head(data_5min_0405)
-summary(data_5min_0405)
-
+nrow(test1)
+head(test2)
 table()
 
+test2 <- data_combined_5 %>%
+         filter(Avg.Travel.Time..mins.=="Closed")  %>%
+         mutate(id=paste(X5.Minutes, roadway, sep="_")) %>%
+         filter(!(id %in% test1$id))
 
-test <- data_5min_0405_green %>%
-        filter(!is.na(speed))
+nrow(test2)
+table()
 
-nrow(test)/nrow(data_5min_0405_green)
-
-
-
-# Todo list note
-test1 <- table(data_5min_0405_green$detector_id)
-test2 <- table(data_5min_0405_green$date)
-
-max(test1); min(test1)
-max(test2); min(test2)
+table(test2$id)
 
 
+test %>%
+  filter(X5.Minutes=="01/02/2019 07:35")
 
-test <- data_5min_0405_green %>%
-        filter(date <= "2005-01-31")
-length(table(test$date))
-length(table(test$detector_id))
+table(data_combined_5$time_hour)
 
+# Calculate early morning (2:00 am - 3:59 am) speed on weekdays 
+em <- data_combined_5 %>%
+        filter(time_hour %in% c(2, 3), !(day_week %in% c("Saturday", "Sunday")))  %>%
+        group_by(roadway, date)  %>%
+        summarise(em_TTime=mean(TTime, na.rm=TRUE),
+                  em_AvgSpeed=mean(AvgSpeed, na.rm=TRUE)) %>%
+        ungroup() 
 
-31
+em_summary <- em_sp %>%
+              group_by(roadway)  %>%
+              summarise(em_AvgSpeed_min=min(em_AvgSpeed, na.rm = TRUE),
+                        em_AvgSpeed_median=median(em_AvgSpeed, na.rm = TRUE),
+                        em_AvgSpeed_mean=mean(em_AvgSpeed, na.rm = TRUE),
+                        em_AvgSpeed_max=max(em_AvgSpeed, na.rm = TRUE),
+                        em_AvgSpeed_sd=sd(em_AvgSpeed, na.rm = TRUE)
+                        )
 
-# data are missing during 2005-02-04 ~ 2005-02-09  
-  
-  
-31+28
+# Calculate historical average speed
+his_avg_wdpeak <- data_combined_5 %>%
+                  filter(AM_PM != "NonPeak", !(day_week %in% c("Saturday", "Sunday"))) %>%
+                  group_by(roadway) %>%
+                  summarise(his_avg_wdpeak_sp=mean(AvgSpeed, na.rm=TRUE),
+                               his_avg_wdpeak_tt=mean(TTime, na.rm=TRUE))
 
+head(data_combined_day_wdpeak)
 
-
-31*24*60/5
-
-
-
-
-
-data_5min_0405_green <- data_5min_0405_green%>%
-                        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                               date=as.Date(starttime),
-                               day_week=weekdays(date),
-                               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                               time_hour=hour(date_time),
-                               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")
-                        ) %>%
-                        select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, 
-                               date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
-head(data_5min_0405_green)
-
-head(data_5min_0405_green)
-
-str(data_5min_0405_green)
-
-sort(unique(data_5min_0405_green$detector_id))
-
-data_5min_0405_green %>% 
-           group_by(time_hour)  %>% 
-           summarise(freq=n(),
-                     AM_PM=first(AM_PM)
-                     ) %>% 
-           as.data.frame()
+str(data_combined_day_wdpeak)
 
 
-
-data_5min_0405_green %>% 
-              select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, date) %>%
-              filter(detector_id==1026) %>%
-              filter(date =="2005-04-03")
-                              
-data_5min_0506_green <- data_5min_0506_green%>%
-                        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                               date=as.Date(starttime),
-                               day_week=weekdays(date),
-                               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                               time_hour=hour(date_time),
-                               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")
-                        ) %>%
-                        select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, 
-                               date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
-
-data_5min_0506_green %>% 
-          select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, date) %>%
-          filter(detector_id==1026) %>%
-          filter(date =="2006-04-02")
-
-data_5min_0506_green %>% 
-                  select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date) %>%
-                  filter(detector_id==1026) %>%
-                  filter(date =="2005-10-30")
-
-# The zone number does not matter 
+summary(data_combined_day_wdpeak)
 
 
-# Check lane number of new detector 
-head(data_5min_0414_green)
-object.size(data_5min_0414_green)
+# add year or month index 
+# How to add year dummy in the DID model:
+# Reference: https://stats.stackexchange.com/questions/76058/specifying-a-difference-in-differences-model-with-multiple-time-periods
+head(data_combined_day_wdpeak)
+str(data_combined_day_wdpeak)
 
+test <- data_combined_day_wdpeak %>% 
+        filter(roadway=="Division_E")
 
-
-test <- data_5min_1314_green %>%
-  filter(starttime!="2014-09-12 00:00:00-07") %>% 
-  filter(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955, 
-                              100369, 100370, 100374, 100375, 100376, 
-                              100435, 100436, 100437))
-head(test)
-
-
-test <- data_5min_1314_green %>%
-        filter(starttime!="2014-09-12 00:00:00-07") %>% 
-        filter(highwayid==1, stationid==1007, lanenumber==1)
-
-head(test)
-table(test$detector_id)
-
-
-test1 <- data_5min_1314_green %>%
-          filter(starttime!="2014-09-12 00:00:00-07") %>% 
-          filter(detector_id %in% c(1073)) %>%
-          mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                 date=as.Date(starttime),
-                 day_week=weekdays(date),
-                 before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                 time_hour=hour(date_time),
-                 AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                 AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                 ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
-          select(highwayid, detector_id, stationid, lanenumber,  starttime, date_time, day_week, date, time_hour,  before_after, 
-                 AM_PM, speed)  %>% # volume
-          arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
-
+test1 <- test %>%
+         mutate(month_num=month(date),
+                year_num=year(date),
+                year_1st=ifelse(date>="2015-09-12"&date<="2016-09-11", 1, 0),
+                year_2nd=ifelse(date>="2016-09-12"&date<="2017-09-11", 1, 0),
+                year_3rd=ifelse(date>="2017-09-12"&date<="2018-09-11", 1, 0)) %>%
+         as.data.frame()  %>%
+         select(roadway, date, AM_PM, year_num, month_num, year_1st, year_2nd, year_3rd)
+test1 %>% filter(year_num==2016)
+test1[1:500,]
+head(test1)
+tail(test1, 10)
 nrow(test1)
 head(test1)
-table(test1$date)
+max(data_combined_day_wdpeak$date)
+min(data_combined_day_wdpeak$date)
 
-test2<- data_5min_1314_green %>%
-        filter(starttime!="2014-09-12 00:00:00-07") %>% 
-        filter(detector_id %in% c(100437)) %>%
-        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-               date=as.Date(starttime),
-               day_week=weekdays(date),
-               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-               time_hour=hour(date_time),
-               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
-        select(highwayid, detector_id, stationid, lanenumber,  starttime, date_time, day_week, date, time_hour,  before_after, 
-               AM_PM, speed)  %>% # stationid, lanenumber,  date, time_hour, volume
-        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
+test <- data_combined_day_wdpeak %>%
+        filter(DDV_em_avg>0) %>%
+        select(roadway, date, AM_PM, AvgSpeed, em_AvgSpeed_mean, his_avg_wdpeak_sp, DDV_his_avg, DDV_em_avg)
 
-table(test2$date)
 
+# Add year dummy variables in DID models 
+sp_amo_day_ma <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group,
+                    data=data_combined_day_wdpeak %>% 
+                      filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
 
-head(test2)
+summary(sp_amo_day_ma)
 
+# Add year dummy variable 
+str(data_combined_day_wdpeak)
 
-test3 <- test1 %>% filter(date=="2014-07-14")
-head(test3)
-table(test3$date_time)
-test4 <- test2 %>% filter(date=="2014-07-14")
-head(test4)
-table(test4$date_time)
+data_combined_day_wdpeak <- data_combined_day_wdpeak %>%
+                            mutate(ec_group_num=ifelse(ec_group=="experimental", 1, 0)
+                                   )
 
-test3 %>% filter(date_time=="2014-07-14 23:55:00")
-test4 %>% filter(date_time=="2014-07-14 23:55:00")
 
 
-# Two detectors for one lane 
-# highwayid detector_id stationid lanenumber              starttime           date_time day_week       date time_hour before_after   AM_PM speed
-#         1        1073      1007          1 2014-07-14 23:55:00-07 2014-07-14 23:55:00   Monday 2014-07-14        23            1 NonPeak  61.4
-# test4 %>% filter(date_time=="2014-07-14 23:55:00")
-# highwayid detector_id stationid lanenumber              starttime           date_time day_week       date time_hour before_after   AM_PM speed
-#         1      100437      1007          1 2014-07-14 23:55:00-07 2014-07-14 23:55:00   Monday 2014-07-14        23            1 NonPeak 35.24
 
+ddv_ami_day_ma <- lm(DDV_his_em_avg ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="AM"))
 
-data_5min_0405_green <- data_5min_0405_green%>%
-                        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                               date=as.Date(starttime),
-                               day_week=weekdays(date),
-                               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                               time_hour=hour(date_time),
-         
-                                                     AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")
-                        ) %>%
-                        select(highwayid, stationid, ec_group, lanenumber, detector_id, starttime, date_time, 
-                               date, day_week, before_after, time_hour, AM_PM, speed, volume)  %>%
-                        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
+summary(ddv_ami_day_ma)
 
-test <- data_5min_0414_green %>% group_by(highwayid, stationid, lanenumber, detector_id) %>% 
-        summarise(freq=n()) %>% 
-        as.data.frame() %>% 
-        mutate(sid=paste(highwayid, stationid, lanenumber, sep=""))
 
-table(test$sid)
+test <- data_combined_day_wdpeak %>% 
+        filter(roadway %in% c("McLoughlin_N", "Powell_W"), AM_PM=="AM")
 
-head(data_5min_0414_green)
-
-
-object.size()
-
-
-
-
-# Convert 5-minute data to 15-minute data 
-
-head(data_5min_0405_green)
-
-data_5min_0405_green 
-
-
-test <- data_5min_0405_green %>%
-        select(id, starttime)
-
-seq(as.Date("2011-12-30"), as.Date("2012-01-04"), by="days")
-rep(seq(as.Date("2011-12-30"), as.Date("2012-01-04"), by="days"), each=5)
-
-
-
-
-
-test_5min <- data_5min_0405_green %>%
-        mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-               date=as.Date(starttime),
-               day_week=weekdays(date),
-               before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-               time_hour=hour(date_time),
-               AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-               AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-               ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
-        select(highwayid, stationid, lanenumber, detector_id, starttime, date, date_time,  time_hour, day_week, before_after, 
-                 AM_PM, speed)  %>% #   volume
-        arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
-
-head(test)
-max(test$date) - min(test$date)
-
-length(sort(unique(test$date)))
-
-
-
-rep(seq(as.Date("2011-12-30"), as.Date("2012-01-04"), by="days"), each=5)
-
-
-seq(as.Date("2004-12-31"), as.Date("2012-01-04"), by="days")
-
-
-
-
-tryit <- data.frame(day_255=seq(as.Date("2014-12-31"), as.Date("2015-09-12"), by="days"))
-
-
-nrow(tryit)
-
-
-a <- data.frame(date_256=as.character(seq(as.Date("2004-12-31"), as.Date("2005-02-28"), by="days")))
-head(a)
-nrow(a)
-
-b <- data.frame(date_256=as.character(sort(unique(test$date))), exisitng=2)
-
-str(a)
-str(b)
-
-head(a)
-head(b)
-c <- a %>%
-     left_join(b)
-class(a)
-class(b)
-
-set.diff(a, b)
-
-
-
-head(test_5min)
-
-
-test_5min_sub <-  test_5min %>%
-                  filter(date <= "2005-02-28")
-
-
-
-head(test_5min_sub)
-
-test_5min_sub 
-str(test_5min_sub)
-seq(ISOdatetime(2005,4,3,0,0,0), ISOdatetime(2005,4,5,0,0,0), by=(60*60))
-seq(ISOdatetime(2005,10,30,0,0,0), ISOdatetime(2005,11,1,0,0,0), by=(60*60))
-
-test_5min %>% filter(date=="2005-04-03")
-
-
-
-24*60/5
-
-
-test <- data.frame(hour=)
-
-hour=rep(0:23, each=12)
-min=rep(seq(0, 55, by=5), )
-
-
-
-
-seq(ISOdatetime(2005,4,3,0,0,0), ISOdatetime(2005,4,5,0,0,0), by=(60*60))
-
-
-
-
-
-test <- seq(ISOdatetime(2005,4,2,0,0,0), ISOdatetime(2005,4,2,23,55,0), by=(60*5))
-length(test)
-
-
-
-head(test_5min)
-
-
-
-
-test <- data.frame(date_time=seq(ISOdatetime(2005,4,2,0,0,0), ISOdatetime(2005,4,4,23,55,0), by=(60*5)))
-length(test)
-
-24*60/5
-288*2
-24*24
-12*24
-
-test <- data.frame(date_time=seq(ISOdatetime(2005,1,1,0,0,0), ISOdatetime(2005,1,31,23,55,0), by=(60*5)))
-nrow(test)
-head(test)
-
-
-test <- data.frame(date_time=seq(ISOdatetime(2005,4,2,0,0,0), ISOdatetime(2005,4,4,23,55,0), by=(60*5)))
 str(test)
+summary(test)
 
 
-test_5min <- data_5min_0405_green %>%
-              mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                     date=as.Date(starttime),
-                     day_week=weekdays(date),
-                     before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
-                     time_hour=hour(date_time),
-                     AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"), 
-                     AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
-                     ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
-              select(highwayid, stationid, lanenumber, detector_id, starttime, date, date_time,  time_hour, day_week, before_after, 
-                     AM_PM, speed)  %>% #   volume
-              arrange(highwayid, stationid, lanenumber, detector_id, date_time)  
+sp_amo_day_ma <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group,
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
 
-head(test_5min)
+sp_amo_day_ma_yd <- lm(AvgSpeed ~  before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group,
+                       data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+sp_amo_day_ma_yd_int <- lm(AvgSpeed ~  before_after + ec_group + year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                           data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
 
 
-test_5min_sub <- test_5min %>%
-                 select(starttime, date_time, date, speed) %>%
-                 filter(date < "2005-02-01")
-
-summary(test_5min_sub)
-nrow(test_5min_sub)
-
-time_frame <- data.frame(date_time=seq(ISOdatetime(2005,1,1,0,0,0), ISOdatetime(2005,1,31,23,55,0), by=(60*5))) %>% 
-              mutate(date=as.Date(date_time),
-                     hour=hour(date_time),
-                     min5=minute(date_time),
-                     min15=ifelse(min5 %in% c(0,  5,  10), 1, NA),
-                     min15=ifelse(min5 %in% c(15, 20, 25), 2, min15),
-                     min15=ifelse(min5 %in% c(30, 35, 40), 3, min15),
-                     min15=ifelse(min5 %in% c(45, 50, 55), 4, min15)
-                     ) %>%
-              left_join(test_5min_sub)
-         
-head(time_frame, 100)      
-time_frame %>% filter(date=="2005-01-10")
-
-
-head(data_5min_0414_green)
+stargazer(sp_amo_day_ma, sp_amo_day_ma_yd, sp_amo_day_ma_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="AM outbound from CBD speed models")
 
 
 
+sp_amo_day_lr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
 
-data_15min_0414_green <-  data_5min_0414_green %>%
-                          mutate(hour=hour(date_time),
-                                 min5=minute(date_time),
-                                 min15=ifelse(min5 %in% c(0,  5,  10), 1, NA),
-                                 min15=ifelse(min5 %in% c(15, 20, 25), 2, min15),
-                                 min15=ifelse(min5 %in% c(30, 35, 40), 3, min15),
-                                 min15=ifelse(min5 %in% c(45, 50, 55), 4, min15)) %>%
-                          group_by (highwayid, stationid, lanenumber, detector_id, date, hour, min15)  %>%
-                          summarise(speed=mean(speed, na.rm=TRUE),
-                                    volume=mean(volume, na.rm=TRUE))
+sp_amo_day_lr_yd <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
 
-summary(data_15min_0414_green)
+sp_amo_day_lr_yd_int <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                          data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
 
-head(data_15min_0414_green %>% filter(!is.na(speed)), 20)
-
-data_5min_0414_green %>% filter()
-
-head(data_5min_0414_green)
+stargazer(sp_amo_day_lr, sp_amo_day_lr_yd, sp_amo_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="AM outbound from CBD day-to-day variation models")
 
 
+sp_ami_day_atr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
 
-test <- data_15min_0414_green %>% filter(!is.na(speed))
-head(test)
+sp_ami_day_atr_yd <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                        data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
 
+sp_ami_day_atr_yd_int <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                            data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
 
-data_5min_0414_green %>% filter(detector_id==1025, date=="2005-03-01")
-
-
-
-
-(59.88+65.00+54.7)/3
-(25+44+31)/3
-
-
-head(data_5min_0405_green)
-
-
-data_5min_0405_green <-  data_5min_0405_green %>%
-                          mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)), 
-                                 hour=hour(date_time),
-                                 min5=minute(date_time),
-                                 min15=ifelse(min5 %in% c(0,  5,  10), 1, NA),
-                                 min15=ifelse(min5 %in% c(15, 20, 25), 2, min15),
-                                 min15=ifelse(min5 %in% c(30, 35, 40), 3, min15),
-                                 min15=ifelse(min5 %in% c(45, 50, 55), 4, min15)) 
+stargazer(sp_ami_day_atr, sp_ami_day_atr_yd, sp_ami_day_atr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="AM inbound CBD CBD day-to-day variation models")
 
 
-head(data_5min_0405_green, 100)
+sp_pmo_day_lr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+sp_pmo_day_lr_yd <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+sp_pmo_day_lr_yd_int <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+stargazer(sp_pmo_day_lr, sp_pmo_day_lr_yd, sp_pmo_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="PM outbound from CBD day-to-day variation models")
+
+sp_pmi_day_lr <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="PM"))
+
+sp_pmi_day_lr_yd <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="PM"))
+
+sp_pmi_day_lr_yd_int <- lm(AvgSpeed ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                          data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="PM"))
+
+stargazer(sp_pmi_day_lr, sp_pmi_day_lr_yd, sp_pmi_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="PM inbound to CBD day-to-day variation models")
+
+
+ddv_amo_day_lr <- lm(DDV_his_em_avg ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
+
+ddv_amo_day_lr_yd <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
+
+ddv_amo_day_lr_yd_int <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                            data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="AM"))
+
+stargazer(ddv_amo_day_lr, ddv_amo_day_lr_yd, ddv_amo_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="AM outbound from CBD day-to-day variation models")
+
+
+
+ddv_ami_day_lr <- lm(DDV_his_em_avg ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
+
+ddv_ami_day_lr_yd <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                      data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
+
+ddv_ami_day_lr_yd_int <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd,
+                            data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_W", "Holgate_W", "Milwaukie_17th_N"), AM_PM=="AM"))
+
+stargazer(ddv_ami_day_lr, ddv_ami_day_lr_yd, ddv_ami_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="AM inbound to CBD day-to-day variation models")
+
+
+ddv_pmo_day_lr <- lm(DDV_his_em_avg ~ before_after + ec_group + before_after*ec_group, 
+                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+ddv_pmo_day_lr_yd <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group, 
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+ddv_pmo_day_lr_yd_int <- lm(DDV_his_em_avg ~ before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd,
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("Division_E", "Holgate_E", "Milwaukie_17th_S"), AM_PM=="PM"))
+
+stargazer(ddv_pmo_day_lr, ddv_pmo_day_lr_yd, ddv_pmo_day_lr_yd_int,
+          column.labels = c("Base model", "year", "year&interaction term"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", 
+                             "2nd year post-treatment", "3rd year post-treatment", "Time Period × Group",
+                             "Group × 2nd year", "Group × 3rd year"),
+          type="text", title="PM outbound to CBD day-to-day variation models")
+
+
+
+sp_amo_day_ma <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group,
+                    data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+sp_amo_day_ma_2yd <- lm(AvgSpeed ~  before_after + ec_group +  year_2nd + year_3rd + before_after*ec_group,
+                       data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+sp_amo_day_ma_2yd_int <- lm(AvgSpeed ~  before_after + ec_group + year_2nd + year_3rd + before_after*ec_group + ec_group*year_2nd + ec_group*year_3rd, 
+                           data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+# Reference: https://stats.stackexchange.com/questions/76058/specifying-a-difference-in-differences-model-with-multiple-time-periods
+sp_amo_day_ma_3yd <- lm(AvgSpeed ~  ec_group + year_1st + year_2nd + year_3rd + before_after*ec_group,
+                        data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+# Reference: https://stats.stackexchange.com/questions/225145/difference-in-difference-with-multiple-period-pre-during-and-post-treatment
+sp_amo_day_ma_3yd_int <- lm(AvgSpeed ~  ec_group + year_1st + year_2nd + year_3rd + ec_group*year_1st + ec_group*year_2nd + ec_group*year_3rd, 
+                            data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
+
+
+
+stargazer(sp_amo_day_ma, sp_amo_day_ma_2yd, sp_amo_day_ma_2yd_int, sp_amo_day_ma_3yd, sp_amo_day_ma_3yd_int,
+          dep.var.labels=c("Travel Speed"),
+          type="text", title="AM outbound from CBD speed models", keep.stat=c("n", "adj.rsq", "rsq", "ser"))
+
+
+# Plot of regression results 
+
+# Plot base did model 
+# major artrial speed base models: sp_amo_day_ma, sp_ami_day_ma, sp_pmo_day_ma, sp_pmi_day_ma
+stargazer(sp_amo_day_ma, sp_ami_day_ma, sp_pmo_day_ma, sp_pmi_day_ma, 
+          column.labels = c("AM Outbound", "AM Inbound", "PM Outbound",  "PM Inbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="Speed base models")  
+
+
+sp_amo_day_ma_coef_mx <- t(as.matrix(summary(sp_amo_day_ma)$coefficient[, 1]))
+sp_ami_day_ma_coef_mx <- t(as.matrix(summary(sp_ami_day_ma)$coefficient[, 1]))
+sp_pmo_day_ma_coef_mx <- t(as.matrix(summary(sp_pmo_day_ma)$coefficient[, 1]))
+sp_pmi_day_ma_coef_mx <- t(as.matrix(summary(sp_pmi_day_ma)$coefficient[, 1]))
+
+
+sp_did_ma_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                           Before_after=rep(c("before", "after"), 3),
+                           sp_amo_day_ma_speed=as.numeric(sp_amo_day_ma_coef_mx %*% spec_mx),
+                           sp_ami_day_ma_speed=as.numeric(sp_ami_day_ma_coef_mx %*% spec_mx),
+                           sp_pmo_day_ma_speed=as.numeric(sp_pmo_day_ma_coef_mx %*% spec_mx),
+                           sp_pmi_day_ma_speed=as.numeric(sp_pmi_day_ma_coef_mx %*% spec_mx)) 
+
+save(sp_did_ma_df, file="output/intermediate/sp_did_ma_df.RData")
+
+
+# Major arterial day-to-day variation base model 
+stargazer(ddv_amo_day_ma, ddv_ami_day_ma, ddv_pmo_day_ma, ddv_pmi_day_ma, 
+          column.labels = c("AM Outbound", "AM Inbound", "PM Outbound",  "PM Inbound"),
+          dep.var.labels=c("Day-to-day variation"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="Day-to-day variation in weekday peak periods speed base models")  
+
+
+
+
+
+
+
+
+
+
+
+# Plot multiple years 
+test <- summary(sp_amo_day_ma_3yd_int)$coefficient[, 1]
+class(test)
+
+coefficient.mx <- as.matrix(summary(sp_amo_day_ma_3yd_int)$coefficient[, 1])
+
+year.mx <- matrix(1:24, nrow=3)
+year.mx %*% coefficient.mx
+
+
+
+
+# Plot issue ====
+plot(1, type="n", xlab="before/after period", ylab="fte", xaxt="n",
+     xlim=c(-0.01, 1.01), ylim=c(18, 24))
+
+df2 <- data.frame(supp=rep(c("VC", "OJ"), each=3),
+                  dose=rep(c("D0.5", "D1", "D2"),2),
+                  len=c(6.8, 15, 33, 4.2, 10, 29.5))
+
+# Change line types by groups (supp)
+ggplot(df2, aes(x=dose, y=len, group=supp)) +
+        geom_line(aes(linetype=supp))+
+        geom_point()
 
 
 
@@ -1020,7 +459,12 @@ head(data_5min_0405_green, 100)
 
 
 
-                          
+
+
+
+
+
+
 
 
 

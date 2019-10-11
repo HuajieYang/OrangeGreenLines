@@ -1,14 +1,16 @@
-# This R script analyzes data of the Orange Line
+# This R script prepare data of the Orange Line for analysis
 # Settings
 if (!require("pacman")) {install.packages("pacman"); library(pacman)}
 p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign)
 
 # Weather data ====
 # 1803651 location: PORTLAND INTERNATIONAL AIRPORT, OR US （45.5958	-122.6093）
-wd <- read.csv("data/weather/1803651.csv", stringsAsFactors = F) %>% 
-  select(date=DATE, PRCP, TMAX, TMIN, TAVG)  %>% 
-  mutate(date=as.Date(date),
-         TMAX90=ifelse(TMAX>90, 1,0))
+wd <- read.csv("data/weather/1803651.csv", stringsAsFactors = F) 
+
+wd <- wd %>% 
+      select(date=DATE, PRCP, TMAX, TMIN, TAVG)  %>% 
+      mutate(date=as.Date(date),
+             TMAX90=ifelse(TMAX>90, 1,0))
 
 # Travel time speed data ====
 Powell_E_TTSP <- read.delim("data/Travel time and speed/SE Powell Blvd (E).txt", header = TRUE, sep="\t", stringsAsFactors=FALSE)
@@ -51,7 +53,7 @@ data_combined_5 <- data_combined_5 %>%
   mutate(date_time=mdy_hm(X5.Minutes),
          date=as.Date(date_time),
          TTime=as.numeric(Avg.Travel.Time..mins.),
-         AvgSpeed=as.numeric(Average.Speed..mph.)) %>%
+         AvgSpeed=as.numeric(Average.Speed..mph.)) %>% # Some observations of Avg.Travel.Time..mins are "closed", generating NAs 
   filter(date > "2012-09-11", date < "2018-09-12") %>%
   mutate(day_week=weekdays(date),
          before_after=ifelse(date < ymd("2015-09-12"), 0, 1),
@@ -70,34 +72,65 @@ data_combined_5 <- data_combined_5 %>%
          ) 
 
 data_combined_15 <- data_combined_5 %>%
-  group_by(roadway, date, time_hour, min15) %>% 
-  summarise(TTime=mean(TTime, na.rm=TRUE),
-            AvgSpeed=mean(AvgSpeed, na.rm=TRUE),
-            AM_PM=first(AM_PM),
-            day_week=first(day_week),
-            before_after=first(before_after),
-            ec_group=first(ec_group))  %>%
-  ungroup() %>% 
-  left_join(wd, by=c("date"))
+                    group_by(roadway, date, time_hour, min15) %>% 
+                    summarise(TTime=mean(TTime, na.rm=TRUE),
+                              AvgSpeed=mean(AvgSpeed, na.rm=TRUE),
+                              AM_PM=first(AM_PM),
+                              day_week=first(day_week),
+                              before_after=first(before_after),
+                              ec_group=first(ec_group))  %>%
+                    ungroup() %>% 
+                    left_join(wd, by=c("date"))
 
 data_combined_day <- data_combined_5 %>%
-  group_by(roadway, date, AM_PM) %>% 
-  summarise(TTime=mean(TTime, na.rm=TRUE),
-            SDSpeed=sd(AvgSpeed, na.rm=TRUE),
-            AvgSpeed=mean(AvgSpeed, na.rm=TRUE),
-            day_week=first(day_week),
-            before_after=first(before_after),
-            ec_group=first(ec_group))  %>%
-  ungroup() %>% 
-  left_join(wd, by=c("date"))
+                      group_by(roadway, date, AM_PM) %>% 
+                      summarise(TTime=mean(TTime, na.rm=TRUE),
+                                # SDSpeed=sd(AvgSpeed, na.rm=TRUE),
+                                AvgSpeed=mean(AvgSpeed, na.rm=TRUE),
+                                day_week=first(day_week),
+                                before_after=first(before_after),
+                                ec_group=first(ec_group))  %>%
+                      ungroup() %>% 
+                      left_join(wd, by=c("date"))
 
-
-# Select the obsersvations during peak hours of weekday 
+# Select the observations during weekday peak periods
 data_combined_15_wdpeak <- data_combined_15 %>%
                            filter(AM_PM != "NonPeak", !(day_week %in% c("Saturday", "Sunday")))                           
 
 data_combined_day_wdpeak <- data_combined_day %>%
                             filter(AM_PM != "NonPeak", !(day_week %in% c("Saturday", "Sunday")))  
+
+# Calculate early morning (2:00 am - 3:59 am) speed on weekdays 
+em_summary <- data_combined_5 %>%
+              filter(time_hour %in% c(2, 3), !(day_week %in% c("Saturday", "Sunday")))  %>%
+              group_by(roadway, date)  %>%
+              summarise(em_TTime=mean(TTime, na.rm=TRUE),
+                        em_AvgSpeed=mean(AvgSpeed, na.rm=TRUE)) %>%
+              ungroup() %>%
+              group_by(roadway)  %>%
+              summarise(his_em_AvgSpeed_min=min(em_AvgSpeed, na.rm = TRUE),
+                        his_em_AvgSpeed_median=median(em_AvgSpeed, na.rm = TRUE),
+                        his_em_AvgSpeed_mean=mean(em_AvgSpeed, na.rm = TRUE),
+                        his_em_AvgSpeed_max=max(em_AvgSpeed, na.rm = TRUE),
+                        his_em_AvgSpeed_sd=sd(em_AvgSpeed, na.rm = TRUE)) %>%
+              ungroup()
+              
+# Calculate historical average speed
+his_avg_wdpeak <- data_combined_day_wdpeak %>%
+                  group_by(roadway) %>%
+                  summarise(his_peak_avg_sp=mean(AvgSpeed, na.rm=TRUE),
+                           his_peak_avg_tt=mean(TTime, na.rm=TRUE))
+
+data_combined_day_wdpeak <- data_combined_day_wdpeak %>%
+                            left_join(em_summary) %>%
+                            left_join(his_avg_wdpeak)  %>%
+                            mutate(DDV_his_peak_avg=AvgSpeed - his_peak_avg_sp, # day-to-day variation (DDV): keep DDV to be positive
+                                   DDV_his_em_avg=his_em_AvgSpeed_mean - AvgSpeed,
+                                   month_num=month(date),
+                                   year_num=year(date),
+                                   year_1st=ifelse(date>="2015-09-12"&date<="2016-09-11", 1, 0),
+                                   year_2nd=ifelse(date>="2016-09-12"&date<="2017-09-11", 1, 0),
+                                   year_3rd=ifelse(date>="2017-09-12"&date<="2018-09-11", 1, 0)) 
 
 save(data_combined_day_wdpeak, file="output/intermediate/data_combined_day_wdpeak.RData")
 
@@ -248,5 +281,73 @@ ridership_w_rt_experimental <- ridership_w %>%
 # 
 # test2 <- experimental_busstops %>% filter(ROUTE==291)
 
+# Post DID regression analysis ====
+spec_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                    0, 1, 0, 1, 0, 1,
+                    0, 0, 1, 1, 1, 1, 
+                    0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# major arterial speed base models
+sp_amo_day_ma_coef_mx <- t(as.matrix(summary(sp_amo_day_ma)$coefficient[, 1]))
+sp_ami_day_ma_coef_mx <- t(as.matrix(summary(sp_ami_day_ma)$coefficient[, 1]))
+sp_pmo_day_ma_coef_mx <- t(as.matrix(summary(sp_pmo_day_ma)$coefficient[, 1]))
+sp_pmi_day_ma_coef_mx <- t(as.matrix(summary(sp_pmi_day_ma)$coefficient[, 1]))
+
+sp_did_ma_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                           Before_after=rep(c("before", "after"), 3),
+                           sp_amo_day_ma_speed=as.numeric(sp_amo_day_ma_coef_mx %*% spec_mx),
+                           sp_ami_day_ma_speed=as.numeric(sp_ami_day_ma_coef_mx %*% spec_mx),
+                           sp_pmo_day_ma_speed=as.numeric(sp_pmo_day_ma_coef_mx %*% spec_mx),
+                           sp_pmi_day_ma_speed=as.numeric(sp_pmi_day_ma_coef_mx %*% spec_mx)) 
+
+save(sp_did_ma_df, file="output/intermediate/sp_did_ma_df.RData")
+
+# major arterial day-to-day variation base models 
+ddv_amo_day_ma_coef_mx <- t(as.matrix(summary(ddv_amo_day_ma)$coefficient[, 1]))
+ddv_ami_day_ma_coef_mx <- t(as.matrix(summary(ddv_ami_day_ma)$coefficient[, 1]))
+ddv_pmo_day_ma_coef_mx <- t(as.matrix(summary(ddv_pmo_day_ma)$coefficient[, 1]))
+ddv_pmi_day_ma_coef_mx <- t(as.matrix(summary(ddv_pmi_day_ma)$coefficient[, 1]))
+
+
+ddv_did_ma_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                            Before_after=rep(c("before", "after"), 3),
+                            ddv_amo_day_ma_speed=as.numeric(ddv_amo_day_ma_coef_mx %*% spec_mx),
+                            ddv_ami_day_ma_speed=as.numeric(ddv_ami_day_ma_coef_mx %*% spec_mx),
+                            ddv_pmo_day_ma_speed=as.numeric(ddv_pmo_day_ma_coef_mx %*% spec_mx),
+                            ddv_pmi_day_ma_speed=as.numeric(ddv_pmi_day_ma_coef_mx %*% spec_mx)) 
+
+save(ddv_did_ma_df, file="output/intermediate/ddv_did_ma_df.RData")
+
+
+# local roadway speed base models
+sp_amo_day_lr_coef_mx <- t(as.matrix(summary(sp_amo_day_lr)$coefficient[, 1]))
+sp_ami_day_lr_coef_mx <- t(as.matrix(summary(sp_ami_day_lr)$coefficient[, 1]))
+sp_pmo_day_lr_coef_mx <- t(as.matrix(summary(sp_pmo_day_lr)$coefficient[, 1]))
+sp_pmi_day_lr_coef_mx <- t(as.matrix(summary(sp_pmi_day_lr)$coefficient[, 1]))
+
+sp_did_lr_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                           Before_after=rep(c("before", "after"), 3),
+                           sp_amo_day_lr_speed=as.numeric(sp_amo_day_lr_coef_mx %*% spec_mx),
+                           sp_ami_day_lr_speed=as.numeric(sp_ami_day_lr_coef_mx %*% spec_mx),
+                           sp_pmo_day_lr_speed=as.numeric(sp_pmo_day_lr_coef_mx %*% spec_mx),
+                           sp_pmi_day_lr_speed=as.numeric(sp_pmi_day_lr_coef_mx %*% spec_mx)) 
+
+save(sp_did_lr_df, file="output/intermediate/sp_did_lr_df.RData")
+
+# local roadway day-to-day variation base models 
+ddv_amo_day_lr_coef_mx <- t(as.matrix(summary(ddv_amo_day_lr)$coefficient[, 1]))
+ddv_ami_day_lr_coef_mx <- t(as.matrix(summary(ddv_ami_day_lr)$coefficient[, 1]))
+ddv_pmo_day_lr_coef_mx <- t(as.matrix(summary(ddv_pmo_day_lr)$coefficient[, 1]))
+ddv_pmi_day_lr_coef_mx <- t(as.matrix(summary(ddv_pmi_day_lr)$coefficient[, 1]))
+
+
+ddv_did_lr_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                            Before_after=rep(c("before", "after"), 3),
+                            ddv_amo_day_lr_speed=as.numeric(ddv_amo_day_lr_coef_mx %*% spec_mx),
+                            ddv_ami_day_lr_speed=as.numeric(ddv_ami_day_lr_coef_mx %*% spec_mx),
+                            ddv_pmo_day_lr_speed=as.numeric(ddv_pmo_day_lr_coef_mx %*% spec_mx),
+                            ddv_pmi_day_lr_speed=as.numeric(ddv_pmi_day_lr_coef_mx %*% spec_mx)) 
+
+save(ddv_did_lr_df, file="output/intermediate/ddv_did_lr_df.RData")
 
 
