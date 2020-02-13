@@ -1,0 +1,329 @@
+---
+title: "Green Line transit ridership"
+date: "11/21/2019"
+output: html_document
+---
+
+# Setting 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+options(scipen=100)
+options(digits=3)
+
+if (!require("pacman")) {install.packages("pacman"); library(pacman)}
+p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign, scales, ggrepel)
+```
+
+# Corridor (Green line from main station to Clackamas center) 
+## Load and oranize transit ridership and stop locations data 
+```{r}
+# Load ridership data 
+load("output/intermediate/ridership_w.RData")
+
+# Load GIS bus stop data of con and exp corridors 
+gl_exp_busstops <- read.dbf("data/GIS/Green Line/Corridor2/GL_segment_main2clackamas_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+gl_con_busstops <- read.dbf("data/GIS/Green Line/Corridor2/I-5_segment_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+
+# 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
+gl_exp_busstops <- gl_exp_busstops %>%
+                            filter(!(RTE %in% c("194", "195", "196"))) %>%
+                            mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+
+gl_con_busstops <- gl_con_busstops %>%
+                       filter(!(RTE %in% c("194", "195", "196"))) %>%
+                       mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+
+gl_ridership_w_exp <- ridership_w %>%
+                      filter(rt_dir_stopdesc %in% gl_exp_busstops$rt_dir_stopdesc)
+
+gl_ridership_w_con <- ridership_w %>%
+                      filter(rt_dir_stopdesc %in% gl_con_busstops$rt_dir_stopdesc)
+```
+
+## Average total weekday boardings at all bus stops and rail stations within the exp and con corridors
+
+### Ridership within the experimental corridor 
+```{r}
+# Experimental ridership 
+gl_ridership_w_exp_summary1 <- gl_ridership_w_exp %>%
+                               group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION, date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup()
+
+# Select routes operate all the time 
+# sort(table(gl_ridership_w_exp_summary1$ROUTE_NUMBER))
+# Route 200 is the MAX Green Line
+# Routes start service from 2007-03-04 to present 
+gl_ridership_w_exp_rt <- gl_ridership_w_exp_summary1 %>%
+                          group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION) %>%
+                          summarise(date=min(date), 
+                                    freq=n()) %>%
+                          arrange(freq) %>%
+                          filter(date=="2007-03-04"|ROUTE_NUMBER==200) %>% 
+                          as.data.frame()
+
+# Ridership within the experimental corridor by date 
+gl_ridership_w_exp_summary2 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_exp_rt$ROUTE_NUMBER) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="Experimental corridor")
+
+# MAX Green Line ridership by date 
+gl_ridership_w_exp_summary3 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER == 200) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="MAX Green Line")
+
+# Existing transit service ridership within the experimental corridor 
+gl_ridership_w_exp_summary4 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_exp_rt$ROUTE_NUMBER, ROUTE_NUMBER != 200) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup()  %>%
+                               mutate(Group="Existing Transit")
+
+bd_gl_et <- rbind(gl_ridership_w_exp_summary3, gl_ridership_w_exp_summary4)
+
+# Plot of boardings within experimental corridor 
+# "Average total weekday boardings at all bus stops and \n rail stations within the experimental corridor"
+p_gl_bd_exp <- ggplot(gl_ridership_w_exp_summary2, aes(date, ONES_SUM)) + geom_smooth() + 
+                geom_point(size=0.75) + ggtitle("Boardings within the experimental corridor") +
+                labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + 
+                theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                      axis.text = element_text(family="Times",size=8),
+                      axis.title=element_text(family="Times",size=10),
+                      legend.position="bottom",
+                      legend.title=element_text(family="Times",size=10, face="bold"),
+                      legend.text=element_text(family="Times",size=8)) 
+p_gl_bd_exp
+
+# ggsave(file="output/plots/GL plots/Transit/p_gl_bd_exp.png", p_gl_bd_exp, width=5, heigh=3.25)
+
+# Plot MAX Green Line ridership by date 
+p_gl_bd_exp_gl <- ggplot(gl_ridership_w_exp_summary3, aes(date, ONES_SUM)) + geom_smooth() +  geom_point(size=0.75) + # ylim (10000, 17000) + 
+           ggtitle("Green Line boardings within the experimental corridor") +
+           labs(x="Date", y="Boardings") + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                  axis.text = element_text(family="Times",size=8),
+                  axis.title=element_text(family="Times",size=10),
+                  legend.position="bottom",
+                  legend.title=element_text(family="Times",size=10, face="bold"),
+                  legend.text=element_text(family="Times",size=8)) 
+p_gl_bd_exp_gl
+
+# ggsave(file="output/plots/GL plots/Transit/p_gl_bd_exp_gl.png", p_gl_bd_exp_gl, width=5, heigh=3.25)  
+
+
+# Plot existing transit service ridership by date 
+p_gl_bd_exp_et <- ggplot(gl_ridership_w_exp_summary4, aes(date, ONES_SUM)) + geom_smooth() +  geom_point(size=0.75)  + # ylim (4000, 7000) + 
+           ggtitle("Exisitng transit boardings within the experimental corridor") +
+           labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                  axis.text = element_text(family="Times",size=8),
+                  axis.title=element_text(family="Times",size=10),
+                  legend.position="bottom",
+                  legend.title=element_text(family="Times",size=10, face="bold"),
+                  legend.text=element_text(family="Times",size=8)) 
+p_gl_bd_exp_et
+# ggsave(file="output/plots/p_gl_bd_exp_et.png", p_gl_bd_exp_et, width=5, heigh=3.25) 
+
+# plot of ridership of MAX Orange Line and Exisitng transit data.frame 
+p_bd_gl_et <- ggplot(bd_gl_et, aes(date, ONES_SUM, color=Group), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+        geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
+        ggtitle("Boardings at MAX Green Line and exisitng transit \n stops within experimental corridor") +
+        labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + 
+        theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+              axis.text = element_text(family="Times",size=8),
+              axis.title=element_text(family="Times",size=9),
+              legend.position="bottom",
+              legend.title=element_text(family="Times",size=9, face="bold"),
+              legend.text=element_text(family="Times",size=10))  
+
+p_bd_gl_et
+```
+
+### Ridership within the control corridor 
+```{r}
+# Control ridership 
+gl_ridership_w_con_summary1 <- gl_ridership_w_con %>%
+                                group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION, date) %>%
+                                summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                                ungroup()
+
+# Select routes that operate all the time 
+# sort(table(gl_ridership_w_con_summary1$ROUTE_NUMBER))
+# Route 200 is the MAX Green Line
+# Routes start service from 2007-03-04 to present 
+gl_ridership_w_con_rt <- gl_ridership_w_con_summary1 %>%
+                          group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION) %>%
+                          summarise(date=min(date), 
+                                    freq=n()) %>%
+                          arrange(freq) %>%
+                          filter(date=="2007-03-04") %>% #
+                          as.data.frame()
+
+gl_ridership_w_con_summary2 <- gl_ridership_w_con %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_con_rt$ROUTE_NUMBER) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="Control corridor")
+
+# Plot of ridership within control corridor 
+# "average total weekday boardings at all bus stops and \n rail stations within the control corridor"
+p_gl_bd_con <- ggplot(gl_ridership_w_con_summary2, aes(date, ONES_SUM)) + geom_smooth() + ylim (300, 6000) +
+                geom_point(size=0.75) + ggtitle("Boardings within the control corridor") +  
+                labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + 
+                theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                      axis.text = element_text(family="Times",size=8),
+                      axis.title=element_text(family="Times",size=10),
+                      legend.position="bottom",
+                      legend.title=element_text(family="Times",size=10, face="bold"),
+                      legend.text=element_text(family="Times",size=8)) 
+
+p_gl_bd_con
+ggsave(file="output/plots/GL plots/Transit/p_gl_bd_con.png", p_gl_bd_con, width=5, heigh=3.25)
+```
+
+### Combine experimental and control corridors 
+```{r}
+gl_bd_did_df <- rbind(gl_ridership_w_exp_summary2, gl_ridership_w_con_summary2) %>% 
+                mutate(Before_after=ifelse(date >= "2009-09-13", 1, 0),
+                       Year_1st=ifelse(date>="2009-09-13" & date <= "2010-06-06", 1, 0),
+                       Year_2nd=ifelse(date>="2010-09-05" & date <= "2011-06-05", 1, 0),
+                       Year_3rd=ifelse(date>="2011-09-04" & date <= "2012-06-03", 1, 0),
+                       Year_4th=ifelse(date>="2012-09-02" & date <= "2013-06-02", 1, 0),
+                       Year_5th=ifelse(date>="2013-09-01" & date <= "2014-06-01", 1, 0),
+                       Year_6th=ifelse(date>="2014-08-31" & date <= "2015-06-07", 1, 0),
+                       Year_7th=ifelse(date>="2015-09-13" & date <= "2016-06-05", 1, 0),
+                       Year_8th=ifelse(date>="2016-09-04" & date <= "2017-06-04", 1, 0),
+                       Year_9th=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0),
+                       Year_10th=ifelse(date>="2018-09-02" & date <= "2019-03-03", 1, 0)
+                       )
+
+p_gl_bd_ec_cc <- ggplot(gl_bd_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+                  geom_point(aes(colour=Group), size=0.75) + 
+                  ggtitle("Boardings at transit stops within \n the experimental/control corridors") +
+                  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + 
+                  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                        axis.text = element_text(family="Times",size=8),
+                        axis.title=element_text(family="Times",size=10),
+                        legend.position="bottom",
+                        legend.title=element_text(family="Times",size=10, face="bold"),
+                        legend.text=element_text(family="Times",size=10)) #+ ylim(3000, 17000)
+p_gl_bd_ec_cc
+
+# ggsave(file="output/plots/p_gl_bd_ec_cc.png", p_gl_bd_ec_cc, width=5, heigh=3.25)
+```
+
+### DID regression 
+```{r}
+# Green Line boarding did base model 
+gl_bd_did_base <- lm(ONES_SUM ~ Before_after*Group, data=gl_bd_did_df)
+
+# Multiple time periods 
+gl_bd_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Year_2nd*Group + Year_3rd*Group +
+                              Year_4th*Group + Year_5th*Group + Year_6th*Group +
+                              Year_7th*Group + Year_8th*Group + Year_9th*Group +
+                              Year_10th*Group, data=gl_bd_did_df)
+
+stargazer(gl_bd_did_base, gl_bd_did_mt, 
+          column.labels = c("Base model", "Multiple time priods"),
+          dep.var.labels=c("Boardings"),
+          type="text", title="Ridership DID base and multiple time priods models", keep.stat=c("n", "rsq", "adj.rsq", "ser"))
+```
+
+#### DID results plots 
+```{r}
+# Plot for base model 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# major arterial speed base models
+gl_bd_did_base_coef_mx <- t(as.matrix(summary(gl_bd_did_base)$coefficient[, 1]))
+
+
+gl_bd_did_base_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                             Before_after=rep(c("before", "after"), 3),
+                             boardings=as.numeric(gl_bd_did_base_coef_mx %*% bm_mx)) %>%
+                     mutate(Before_after=ifelse(Before_after=="after", 1, 0)) 
+
+
+p_gl_bd_did_base <-  ggplot(gl_bd_did_base_df, aes(x=Before_after, y=boardings, group=Group)) +
+                        geom_line(aes(color=Group)) + geom_point() + ylab("Boardings") + 
+                        xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+                        ggtitle("DID models for ridership base model") + 
+                        theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+                              axis.text = element_text(family="Times",size=8),
+                              axis.title=element_text(family="Times",size=12),
+                              legend.position="bottom",
+                              legend.title=element_text(family="Times",size=12, face="bold"),
+                              legend.text=element_text(family="Times",size=8)) 
+
+p_gl_bd_did_base
+```
+
+
+```{r}
+# Plot for DID with multiple time periods 
+# plot DID models with three year dummy variables 
+mt_10yd_mx <- matrix(c(rep(1, 11),
+                      rep(1, 11),
+                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+                      nrow=22, byrow=TRUE)
+
+gl_bd_did_mt_coef_mx <- t(as.matrix(summary(gl_bd_did_mt)$coefficient[, 1]))
+gl_bd_did_mt_coef_sesq_mx <- t(as.matrix(summary(gl_bd_did_mt)$coefficient[, 2]))^2
+
+
+gl_bd_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year", "6th year",
+                                              "7th year", "8th year", "9th year", "10th year"), ordered = TRUE, 
+                                            levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year", "6th year",
+                                                     "7th year", "8th year", "9th year", "10th year")),
+                           Boardings=as.numeric(gl_bd_did_mt_coef_mx %*% mt_10yd_mx),
+                           Boardings_se=as.numeric(sqrt(gl_bd_did_mt_coef_sesq_mx %*% mt_10yd_mx))
+                           )
+
+# Average treated effect: 10018=sum(summary(gl_bd_did_base)$coefficient[,1])
+p_gl_bd_did_mt <-  ggplot(gl_bd_did_mt_df, aes(x=TreatTime, y=Boardings, group=1)) +
+        geom_line() + geom_point() + 
+        geom_errorbar(aes(ymin=Boardings-1.96*Boardings_se, ymax=Boardings+1.96*Boardings_se, width=.1)) + # , position=position_dodge(0.05)
+        geom_hline(yintercept = c(10018), color=c('#999999'), linetype="dashed")+
+        xlab("Treatment time periods") + ylab("Boardings") + # ylim(25, 30) +
+        ggtitle("Predicted average boardings") + scale_color_manual(values=c('#999999')) +
+        theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+              axis.text = element_text(family="Times",size=8),
+              axis.title=element_text(family="Times",size=12),
+              legend.position="bottom",
+              legend.title=element_text(family="Times",size=12, face="bold"),
+              legend.text=element_text(family="Times",size=8)) 
+
+p_gl_bd_did_mt
+```
