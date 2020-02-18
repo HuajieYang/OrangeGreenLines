@@ -12,23 +12,24 @@ options(scipen=100)
 options(digits=3)
 
 if (!require("pacman")) {install.packages("pacman"); library(pacman)}
-p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign)
+p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign, scales, ggrepel)
 ```
 
-# Load and oranize transit ridership and stop locations data 
+# Load and organize transit ridership and stop locations data 
 ```{r}
-# Transit ridership data ====
-# Ridership dataset does not provide streetcar ridership 
+# # Transit ridership data ====
+# # Ridership dataset does not provide streetcar ridership 
 # ridership <- read.csv("data/Passenger Census Dump - All.csv", as.is=TRUE)
 # 
-# month_df <- data.frame(month_num=c(1:12), 
+# month_df <- data.frame(month_num=c(1:12),
 #                        month_char=c("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"))
 # 
-# ridership_w <- ridership %>% 
+# Weekday ridership 
+# ridership_w <- ridership %>%
 #                 filter(SERVICE_KEY=="W") %>%
 #                 mutate(SUMMARY_BEGIN_DATE=as.character(SUMMARY_BEGIN_DATE),
 #                        YEAR=as.numeric(substr(SUMMARY_BEGIN_DATE, 6,9)),
-#                        MONTH=substr(SUMMARY_BEGIN_DATE, 3,5),
+#                        month_char=substr(SUMMARY_BEGIN_DATE, 3,5),
 #                        DAY=as.numeric(substr(SUMMARY_BEGIN_DATE, 1,2)),
 #                        TIME=substr(SUMMARY_BEGIN_DATE, 11, 18),
 #                        rt_dir_stopdesc=paste(ROUTE_NUMBER, DIRECTION, PUBLIC_LOCATION_DESCRIPTION, sep="_"),
@@ -38,80 +39,226 @@ p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign)
 #                        PM_Peak=ifelse((hm_char %in% c(4, 5, 6, 7))&AM_PM=="PM", "PM Peak", "Non PM Peak"),
 #                        AM_PM_Peak=ifelse(AM_Peak=="AM Peak"|PM_Peak=="PM Peak", "Peak Periods", "Non Peak Periods")
 #                 )  %>%
-#                 left_join(month_df, by=c("MONTH"="month_char")) %>%
+#                 left_join(month_df) %>%
 #                 mutate(date=ymd(paste(YEAR, month_num, DAY, sep="-")))
+# 
+# save(ridership_w, file = "output/intermediate/ridership_w.RData")
 
-load("output/intermediate/ridership_w.RData")
+load("~/OrangeGreenLines/output/intermediate/ridership_w.RData")
 
-# Load  experimental and control stops GIS bus stop data ====
-control_busstops <-  read.dbf("data/GIS/Control_Corridor_BusStops.dbf", as.is=TRUE) 
-experimental_busstops <- read.dbf("data/GIS/Experimental_Corridor_BusStops.dbf", as.is=TRUE) 
+ridership_w <- ridership_w %>%
+               filter(date <= "2018-06-03")
+
+# Use bus stops within corridor (first version of corridor: corridor areas are different in the first and second versions)
+# # Load  experimental and control stops GIS bus stop data ====
+# control_busstops <-  read.dbf("data/GIS/Control_Corridor_BusStops.dbf", as.is=TRUE)
+# experimental_busstops <- read.dbf("data/GIS/Experimental_Corridor_BusStops.dbf", as.is=TRUE)
+# 
+# # RTE 200 is the MAX Green Line
+# control_busstops <- control_busstops %>%
+#                     mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+# 
+# # 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
+# # RTE 290 is the MAX Orange Line
+# experimental_busstops <- experimental_busstops %>%
+#                          filter(!(RTE %in% c("194", "195", "196"))) %>%
+#                          mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+# 
+# # extract ridership of control stops from ridership data
+# ridership_w_control <- ridership_w %>%
+#                           filter(rt_dir_stopdesc %in% control_busstops$rt_dir_stopdesc)
+# 
+# # all rt_dir_stopdesc are available from ridership dataset
+# # sort(unique(ridership_w_rt_control$rt_dir_stopdesc))==sort(unique(control_busstops$rt_dir_stopdesc))
+# 
+# ridership_w_experimental <- ridership_w %>%
+#                                filter(rt_dir_stopdesc %in% experimental_busstops$rt_dir_stopdesc)
+# 
+# # sort(unique(ridership_w_rt_experimental$rt_dir_stopdesc))==sort(unique(experimental_busstops$rt_dir_stopdesc))
+# # There is one stops that do not appear in ridership dataset: SE McLoughlin & Park Ave is not in ridership dataset
+# # setdiff(sort(unique(experimental_busstops$rt_dir_stopdesc)), sort(unique(ridership_w_rt_experimental$rt_dir_stopdesc)))
+
+# Use bus stops within corridor1 (second version of corridor)
+# Load GIS bus stop data of control corridor and experimental corridor 
+control_corridor1_busstops <-  read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Control_corridor1_busstops.dbf", as.is=TRUE) 
+experimental_corridor1_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Experimental_corridor1_busstops.dbf", as.is=TRUE) 
 
 # RTE 200 is the MAX Green Line
-control_busstops <- control_busstops %>%
+control_corridor1_busstops <- control_corridor1_busstops %>%
                     mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
 
-# 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset 
-# RTE 290 is the MAX Orange Line 
-experimental_busstops <- experimental_busstops %>%
-                         filter(!(RTE %in% c("194", "195", "196"))) %>% 
-                         mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+# 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
+# RTE 290 is the MAX Orange Line
+experimental_corridor1_busstops <- experimental_corridor1_busstops %>%
+                          filter(!(RTE %in% c("194", "195", "196"))) %>%
+                          mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
 
 # extract ridership of control stops from ridership data 
-ridership_w_control <- ridership_w %>%
-                          filter(rt_dir_stopdesc %in% control_busstops$rt_dir_stopdesc)
+ridership_w_rt_control_corridor1 <- ridership_w %>%
+                                      filter(rt_dir_stopdesc %in% control_corridor1_busstops$rt_dir_stopdesc)
 
-# all rt_dir_stopdesc are available from ridership dataset 
-# sort(unique(ridership_w_rt_control$rt_dir_stopdesc))==sort(unique(control_busstops$rt_dir_stopdesc)) 
+# all rt_dir_stopdesc are available from ridership dataset
+# sort(unique(ridership_w_rt_control_corridor1$rt_dir_stopdesc))==sort(unique(control_corridor1_busstops$rt_dir_stopdesc))
+ 
+ridership_w_rt_experimental_corridorl <- ridership_w %>%
+                                          filter(rt_dir_stopdesc %in% experimental_corridor1_busstops$rt_dir_stopdesc)
 
-ridership_w_experimental <- ridership_w %>%
-                               filter(rt_dir_stopdesc %in% experimental_busstops$rt_dir_stopdesc)
+# There are three stops do not show in riderhship dataset:  "291_0_SE McLoughlin & Park Ave", "33_1_SE Jefferson & Main", "34_1_SE Jefferson & Main" 
+# setdiff(sort(unique(experimental_corridor1_busstops$rt_dir_stopdesc)), sort(unique(ridership_w_rt_experimental_corridorl$rt_dir_stopdesc)))
 
-# sort(unique(ridership_w_rt_experimental$rt_dir_stopdesc))==sort(unique(experimental_busstops$rt_dir_stopdesc))
-# There is one stops that do not appear in ridership dataset: SE McLoughlin & Park Ave is not in ridership dataset 
-# setdiff(sort(unique(experimental_busstops$rt_dir_stopdesc)), sort(unique(ridership_w_rt_experimental$rt_dir_stopdesc)))
+# Avoid recoding 
+# Use data from Control_corridor1_busstops.dbf & Experimental_corridor1_busstops.dbf
+ridership_w_control <- ridership_w_rt_control_corridor1
+ridership_w_experimental <- ridership_w_rt_experimental_corridorl
 ```
+
 
 # Transit ridership comparisons 
 There are four comparisons. 
 
 ## average total weekday boardings at all bus stops and rail stations within the experimental and control corridors
 The ridership of the MAX Orange Line accouts for the most of the  increase in ridership. 
+
 ```{r}
 # Route 2  provides ridership from 2018-09-02 to present
 # 291-Orange Night Bus provides ridership from 2015-09-13 to present 
 # 290 MAX Orange Line provides ridership from 2015-09-13 to present 
 ridership_w_experimental_summary1 <- ridership_w_experimental %>%
-  filter(date >= "2012-09-02") %>% 
-  group_by(ROUTE_NUMBER, date) %>%
-  summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
-  ungroup()
-
-ridership_w_experimental_summary2 <- ridership_w_experimental %>%
-  filter(!(ROUTE_NUMBER %in% c(2)), date >= "2012-09-02") %>% 
-  group_by(date) %>%
-  summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
-  ungroup()
-
-ggplot(ridership_w_experimental_summary2, aes(date, ONES_SUM)) + geom_smooth() + 
-  geom_point() + ggtitle("average total weekday boardings at all bus stops and \n rail stations within the experimental corridor")
-
-ridership_w_experimental_summary3 <- ridership_w_experimental %>%
-                                      filter(ROUTE_NUMBER %in% c(290)) %>% # Route 290 MAX Orange Line  
+                                      filter(date >= "2012-09-02") %>% 
                                       group_by(ROUTE_NUMBER, date) %>%
                                       summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
-                                      ungroup() %>%
-                                      mutate(ROUTE_NUMBER=as.factor(ROUTE_NUMBER))
+                                      ungroup()
+
+ridership_w_experimental_summary2 <- ridership_w_experimental %>%
+                                      filter(!(ROUTE_NUMBER %in% c(2, 291)), date >= "2012-09-02") %>% 
+                                      group_by(date) %>%
+                                      summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                                      ungroup()
+
+# Plot of ridership within experimental corridor 
+# "Average total weekday boardings at all bus stops and \n rail stations within the experimental corridor"
+p_bd_ec <- ggplot(ridership_w_experimental_summary2, aes(date, ONES_SUM)) + geom_smooth() + 
+           geom_point(size=0.75) + ggtitle("Boardings within the experimental corridor") +
+           labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                 axis.text = element_text(family="Times",size=8),
+                 axis.title=element_text(family="Times",size=10),
+                 legend.position="bottom",
+                 legend.title=element_text(family="Times",size=10, face="bold"),
+                 legend.text=element_text(family="Times",size=8)) 
+
+
+# ggsave(file="~/OrangeGreenLines/output/plots/p_bd_ec.png", p_bd_ec, width=5, heigh=3.25)
+
+# Orange Line ridership 
+ridership_w_experimental_summary3 <- ridership_w_experimental %>%
+                                      filter(ROUTE_NUMBER %in% c(290)) %>% # Route 290 MAX Orange Line  
+                                      group_by(date) %>%
+                                      summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                                      ungroup() 
 
 # The ridership of MAX Orange Line is large 
-ggplot(ridership_w_experimental_summary3, aes(date, ONES_SUM)) + geom_smooth() + geom_point()  + ylim (4000, 7000) + 
-    ggtitle("average total weekday boardings at MAX Orange Line \n stations within the experimental corridor")
+# plot of boardings of MAX Orange Line   
+# "Average total weekday boardings at MAX Orange Line \n stations within the experimental corridor"
+p_bd_ol <- ggplot(ridership_w_experimental_summary3, aes(date, ONES_SUM)) + geom_smooth() +  geom_point(size=0.75) + ylim (4000, 7000) + 
+           ggtitle("Orange Line boardings within the experimental corridor") +
+           labs(x="Date", y="Boardings") + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                  axis.text = element_text(family="Times",size=8),
+                  axis.title=element_text(family="Times",size=10),
+                  legend.position="bottom",
+                  legend.title=element_text(family="Times",size=10, face="bold"),
+                  legend.text=element_text(family="Times",size=8)) 
+p_bd_ol
+# ggsave(file="output/plots/p_bd_ol.png", p_bd_ol, width=5, heigh=3.25)  
+
+# Existing bus ridership within experimental corridor 
+ridership_w_experimental_summary4 <- ridership_w_experimental %>%
+                                      filter(!(ROUTE_NUMBER %in% c(2, 290, 291)), date >= "2012-09-02") %>% 
+                                      group_by(date) %>%
+                                      summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                                      ungroup()
+
+
+p_bd_ec_no_ol <- ggplot(ridership_w_experimental_summary4, aes(date, ONES_SUM)) + geom_smooth() +  geom_point(size=0.75)  + ylim (4000, 7000) + 
+           ggtitle("Bus boardings within the experimental corridor") +
+           labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                  axis.text = element_text(family="Times",size=8),
+                  axis.title=element_text(family="Times",size=10),
+                  legend.position="bottom",
+                  legend.title=element_text(family="Times",size=10, face="bold"),
+                  legend.text=element_text(family="Times",size=8)) 
+p_bd_ec_no_ol
+# ggsave(file="output/plots/p_bd_ec_no_ol.png", p_bd_ec_no_ol, width=5, heigh=3.25) 
+
+
+# existing trasnit ridership by route 
+ridership_w_experimental_summary5 <- ridership_w_experimental %>%
+        filter(!(ROUTE_NUMBER %in% c(2, 290, 291)), date >= "2012-09-02") %>% 
+        group_by(ROUTE_NUMBER, date) %>%
+        summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+        ungroup() %>%
+        mutate(ROUTE_NUMBER=as.factor(ROUTE_NUMBER)) %>%
+        mutate(label = if_else(date == max(date), as.character(ROUTE_NUMBER), NA_character_)) %>%
+        as.data.frame()
+
+# Plot of boardings of existing bus within experimental corridor by route 
+p_bd_ec_et_rt <- ggplot(ridership_w_experimental_summary5, aes(date, ONES_SUM, color=ROUTE_NUMBER), group=ROUTE_NUMBER) + # geom_smooth(aes(linetype=ROUTE_NUMBER), color="#909497") +
+          geom_line(size=0.3) + # scale_color_manual(values=c("#A569BD", "#F8C471")) + 
+          ggtitle("Boardings at exisitng transit \n stops within experimental corridor") +
+          labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+          #  scale_x_date(breaks="month", labels=date_format("%b")) +
+          scale_x_date(breaks = pretty_breaks(20))  + 
+          theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                axis.text = element_text(family="Times",size=8),
+                axis.title=element_text(family="Times",size=9),
+                legend.position = "none"
+                # legend.position="bottom",
+                # legend.title=element_text(family="Times",size=9, face="bold"),
+                # legend.text=element_text(family="Times",size=10)
+                ) + geom_label_repel(aes(label = label),
+                           nudge_x = 1,
+                           na.rm = TRUE)
+
+p_bd_ec_et_rt
+
+# ggsave(file="output/plots/p_bd_ec_et_rt.png", p_bd_ec_et_rt, width=5, heigh=3.25) 
+
+# ridership of Orange Line and Existing transit data.frame 
+ridership_w_experimental_summary3 <- ridership_w_experimental_summary3 %>%
+                                     mutate(Group="MAX Orange Line")
+
+ridership_w_experimental_summary4 <- ridership_w_experimental_summary4 %>%
+                                     mutate(Group="Existing Transit")
+
+rs_ol_et <- rbind(ridership_w_experimental_summary3, ridership_w_experimental_summary4)
+
+# plot of ridership of MAX Orange Line and Exisitng transit data.frame 
+p_rs_ol_et <- ggplot(rs_ol_et, aes(date, ONES_SUM, color=Group), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+  geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
+  ggtitle("Boardings at MAX Orange Line and exisitng transit \n stops within experimental corridor") +
+  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + ylim(4000, 7000) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=10))  
+
+p_rs_ol_et
+
+# ggsave(file="p_rs_ol_et.png", p_rs_ol_et, width=5, heigh=3.25)
+# ggsave(file="output/plots/p_rs_ol_et.png", p_rs_ol_et, width=5, heigh=3.25)
 
 ```
+
+
 Transit ridership decreased within the control corridor after the operation of the MAX Orange Line. 
 ```{r}
 # Route 2 only provide ridership from 2018-09-02 to present
 # Route 73 only provide ridership from 2016-09-04 to present 
+# Route 74 only provide ridership form 2018-03-04
 # Ridership of RTE 200 MAX Green Line is from 2012-09-02 to present 
 ridership_w_control_summary1 <- ridership_w_control %>%
   filter(date >= "2012-09-02") %>%
@@ -119,17 +266,141 @@ ridership_w_control_summary1 <- ridership_w_control %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
   ungroup() 
 
-
 ridership_w_control_summary2 <- ridership_w_control %>%
-  filter(!(ROUTE_NUMBER %in% c(2, 73)), date >= "2012-09-02") %>%
+  filter(!(ROUTE_NUMBER %in% c(2, 73, 74)), date >= "2012-09-02") %>%
   group_by(date) %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
   ungroup() 
 
-ggplot(ridership_w_control_summary2, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + ylim (11000, 16000) +
-  ggtitle("average total weekday boardings at all bus stops and \n rail stations within the control corridor")
+# Plot of ridership within control corridor 
+# "average total weekday boardings at all bus stops and \n rail stations within the control corridor"
+p_bd_cc <- ggplot(ridership_w_control_summary2, aes(date, ONES_SUM)) + geom_smooth() + ylim (11000, 16000) +
+           geom_point(size=0.75) + ggtitle("Boardings within the control corridor") +  
+           labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+           theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                axis.text = element_text(family="Times",size=8),
+                axis.title=element_text(family="Times",size=10),
+                legend.position="bottom",
+                legend.title=element_text(family="Times",size=10, face="bold"),
+                legend.text=element_text(family="Times",size=8)) 
+
+p_bd_cc
+# ggsave(file="output/plots/p_bd_cc.png", p_bd_cc, width=5, heigh=3.25)
 ```
 
+```{r}
+# Orangeize ridership dataframe for DID regression 
+ridership_w_experimental_summary2 <- ridership_w_experimental_summary2 %>%
+  mutate(Group="Experimental corridor")
+
+ridership_w_control_summary2 <- ridership_w_control_summary2 %>%
+  mutate(Group="Control corridor")
+
+rs_did_df <- rbind(ridership_w_experimental_summary2, ridership_w_control_summary2) %>% 
+             mutate(Before_after=ifelse(date >= "2015-09-13", 1, 0),
+                    Year_1st=ifelse(date>="2015-09-13" & date <= "2016-06-05", 1, 0),
+                    Year_2nd=ifelse(date>="2016-09-04" & date <= "2017-06-04", 1, 0),
+                    Year_3rd=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0))
+
+p_bd_ec_cc <- ggplot(rs_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+  geom_point(aes(colour=Group), size=0.75) + 
+  ggtitle("Boardings at transit stops within \n the experimental/control corridors") +
+  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=10),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=10, face="bold"),
+        legend.text=element_text(family="Times",size=10)) + ylim(3000, 17000)
+p_bd_ec_cc
+
+# ggsave(file="output/plots/p_bd_ec_cc.png", p_bd_ec_cc, width=5, heigh=3.25)
+```
+
+### DID regression analysis 
+```{r}
+# Base model 
+rs_did_base <- lm(ONES_SUM ~ Before_after*Group, data=rs_did_df)
+
+# Multiple time periods 
+rs_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Group*Year_2nd + Group*Year_3rd, data=rs_did_df)
+
+stargazer(rs_did_base, rs_did_mt, 
+          column.labels = c("Base model", "Multiple time priods"),
+          dep.var.labels=c("Boardings"),
+          type="text", title="Ridership base and multiple time priods", keep.stat=c("n", "rsq", "adj.rsq", "ser"))
+```
+
+### Plots for results 
+```{r}
+# Plot for base model 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# major arterial speed base models
+rs_did_base_coef_mx <- t(as.matrix(summary(rs_did_base)$coefficient[, 1]))
+
+
+rs_did_base_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                             Before_after=rep(c("before", "after"), 3),
+                             boardings=as.numeric(rs_did_base_coef_mx %*% bm_mx)) %>%
+                  mutate(Before_after=ifelse(Before_after=="after", 1, 0)) 
+
+p_rs_did_base <-  ggplot(rs_did_base_df, aes(x=Before_after, y=boardings, group=Group)) +
+                    geom_line(aes(color=Group)) + geom_point() + ylab("Boardings") + 
+                    xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+                    ggtitle("DID models for ridership") + 
+                    theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+                          axis.text = element_text(family="Times",size=8),
+                          axis.title=element_text(family="Times",size=12),
+                          legend.position="bottom",
+                          legend.title=element_text(family="Times",size=12, face="bold"),
+                          legend.text=element_text(family="Times",size=8)) 
+
+p_rs_did_base
+
+# ggsave(file="output/plots/DID plots/p_rs_did_base.png", p_rs_did_base, width=5, heigh=4)
+
+
+# plot DID models with three year dummy variables 
+mt_3yd_mx <- matrix(c(rep(1, 4),
+                      rep(1, 4),
+                      0, 1, 0, 0, 
+                      0, 0, 1, 0,
+                      0, 0, 0, 1,
+                      0, 1, 0, 0, 
+                      0, 0, 1, 0,
+                      0, 0, 0, 1), nrow=8, byrow=TRUE)
+
+# AM outbound 
+rs_did_mt_coef_mx <- t(as.matrix(summary(rs_did_mt)$coefficient[, 1]))
+rs_did_mt_coef_sesq_mx <- t(as.matrix(summary(rs_did_mt)$coefficient[, 2]))^2
+
+rs_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year"), ordered = TRUE, 
+                                                     levels=c("Before", "1st year", "2nd year", "3rd year")),
+                                    Boardings=as.numeric(rs_did_mt_coef_mx %*% mt_3yd_mx),
+                                    Boardings_se=as.numeric(sqrt(rs_did_mt_coef_sesq_mx %*% mt_3yd_mx)))
+
+# Average treated effect: 11744=sum(summary(rs_did_base)$coefficient[,1])
+p_rs_did_mt <-  ggplot(rs_did_mt_df, aes(x=TreatTime, y=Boardings, group=1)) +
+  geom_line() + geom_point() + 
+  geom_errorbar(aes(ymin=Boardings-1.96*Boardings_se, ymax=Boardings+1.96*Boardings_se, width=.1)) + # , position=position_dodge(0.05)
+  geom_hline(yintercept = c(11744), color=c('#999999'), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Boardings") + # ylim(25, 30) +
+  ggtitle("Predicted average boardings") + scale_color_manual(values=c('#999999')) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=12),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=12, face="bold"),
+        legend.text=element_text(family="Times",size=8)) 
+
+p_rs_did_mt
+
+# ggsave(file="output/plots/DID plots/p_rs_did_mt.png", p_rs_did_mt, width=5, heigh=4)
+```
 
 ## compared changes in average total weekday ridership of east–west transit lines within the study area
 These are lines that are alternatives to the Expo Line within the experimental corridor. Ridership is the total boardings along entire routes both directions).
@@ -192,36 +463,80 @@ ggplot(ridership_control, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
 
 ##  Weekday peak-period (AM and PM peaks combined) bidirectional person throughput by east–west Metro bus and rail lines across the same screenlines, before and after.
 
+
+
 ```{r}
-# Experimental ridership for peak period    
-ridership_experimental_peak  <- ridership_w %>% 
+# Ridership of parallel routes during peak 
+ridership_rt_experimental_peak  <-  ridership_w %>% 
   filter(ROUTE_NUMBER %in% c(19, 30, 70, 290, 291), date >= "2012-09-02", AM_PM_Peak=="Peak Periods")  %>% 
   group_by(date)  %>% 
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
-  ungroup() 
+  ungroup() %>% 
+  mutate(Group="Experimental corridor")
 
-ggplot(ridership_experimental_peak, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
+ggplot(ridership_rt_experimental_peak, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
   ggtitle("Weekday peak-period (AM and PM) bidirectional person \n throughput by east–west transit lines across the experimental corridor")
 
 # Control ridership for peak period    
-ridership_control_peak  <- ridership_w %>% 
+ridership_rt_control_peak  <- ridership_w %>% 
   filter(ROUTE_NUMBER %in% c(9, 17), date >= "2012-09-02", AM_PM_Peak=="Peak Periods")  %>% 
   group_by(date)  %>% 
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(Group="Control corridor")
+
+ggplot(ridership_rt_control_peak, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
+  ggtitle("Weekday peak-period (AM and PM) bidirectional person \n throughput by east–west transit lines across the control corridor")
+
+
+ridership_rt_ec_cc_peak <- rbind(ridership_rt_experimental_peak, ridership_rt_control_peak)
+
+p_rs_rt_ec_cc <- ggplot(ridership_rt_ec_cc_peak, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+                  geom_point(aes(colour=Group), size=0.75) + 
+                  ggtitle("Peak-periods bidirectional boardings of transit \n routes across control/experimental corridors") +
+                  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+                  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                        axis.text = element_text(family="Times",size=8),
+                        axis.title=element_text(family="Times",size=10),
+                        legend.position="bottom",
+                        legend.title=element_text(family="Times",size=10, face="bold"),
+                        legend.text=element_text(family="Times",size=10)) # + ylim(3000, 17000)
+
+p_rs_rt_ec_cc
+
+# ggsave(file="output/plots/p_rs_rt_ec_cc.png", p_rs_rt_ec_cc, width=5, heigh=3.25)
+
+
+ridership_rt_experimental_peak2  <-  ridership_w %>% 
+  filter(ROUTE_NUMBER %in% c(19, 30, 70, 290, 291), date >= "2012-09-02", AM_PM_Peak=="Peak Periods")  %>% 
+  mutate(Transit=ifelse(ROUTE_NUMBER==290, "MAX Orange Line", "Existing parallel bus lines"))  %>% 
+  group_by(Transit, date)  %>% 
+  summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
   ungroup() 
 
-ggplot(ridership_control_peak, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
-  ggtitle("Weekday peak-period (AM and PM) bidirectional person \n throughput by east–west transit lines across the control corridor")
+ ggplot(ridership_rt_experimental_peak2, aes(date, ONES_SUM, color=Transit), group=Transit) +       geom_smooth(aes(linetype=Transit), color="#909497") +
+                  geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
+                  ggtitle("Peak periods bidirectional boardings of MAX \n Orange Line and traverse bus lines") +
+                  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+                  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                        axis.text = element_text(family="Times",size=8),
+                        axis.title=element_text(family="Times",size=9),
+                        legend.position="bottom",
+                        legend.title=element_text(family="Times",size=9, face="bold"),
+                        legend.text=element_text(family="Times",size=10))  #+ ylim(4000, 14000) 
+
+
+# ggsave(file="output/plots/p_rs_rt_ol_et.png", p_rs_rt_ol_et, width=5, heigh=3.25)
 ```
 
-## Boardings and alightings at specific bus stops within a quarter-mile walking radius of MAX Orange Line stations.
 
+## Boardings and alightings at specific bus stops within a quarter-mile walking radius of MAX Orange Line stations.
 ```{r}
-bus_stops_quarter_mile <-  read.dbf("data/GIS/Bus_stops_quarter_mile_withoutMAX_SC.dbf", as.is=TRUE) 
+bus_stops_quarter_mile <-  read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Bus_stops_quarter_mile_withoutMAX_SC.dbf", as.is=TRUE) 
 
 bus_stops_quarter_mile <- bus_stops_quarter_mile %>%
   mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))  %>%
-  select(RTE, DIR, LOCATION,  rt_dir_stopdesc, join_STATI)
+  select(RTE, DIR, LOCATION,  rt_dir_stopdesc) # , join_STATI
 
 ridership_bus_stops_quarter_mile <- ridership_w %>%
   filter(rt_dir_stopdesc %in% bus_stops_quarter_mile$rt_dir_stopdesc) %>%
@@ -234,11 +549,37 @@ ridership_bus_stops_quarter_mile_summary1 <- ridership_bus_stops_quarter_mile %>
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE),
             OFFS_SUM=sum(OFFS, na.rm = TRUE))
 
-ggplot(ridership_bus_stops_quarter_mile_summary1, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + 
-  ggtitle("Boardings at specific bus stops within a quarter-mile \n walking radius of MAX Orange Line stations")
+# plot of boardings at specific bus stops within q quarter-mile working radius of MAX Orange Line stations 
+p_bd_bs_qm  <-  ggplot(ridership_bus_stops_quarter_mile_summary1, aes(date, ONES_SUM)) + geom_smooth() + 
+                geom_point(size=0.75) + ggtitle("Boardings at specific bus stops within a quarter-mile \n walking radius of MAX Orange Line stations") +
+                labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+                theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                      axis.text = element_text(family="Times",size=8),
+                      axis.title=element_text(family="Times",size=10),
+                      legend.position="bottom",
+                      legend.title=element_text(family="Times",size=10, face="bold"),
+                      legend.text=element_text(family="Times",size=8)) 
+p_bd_bs_qm  
+  
+# ggsave(file="output/plots/p_bd_bs_qm.png", p_bd_bs_qm, width=5, heigh=3.25)  
 
-ggplot(ridership_bus_stops_quarter_mile_summary1, aes(date, OFFS_SUM)) + geom_point() + geom_smooth() + 
-  ggtitle("alightings at specific bus stops within a quarter-mile \n walking radius of MAX Orange Line stations")
+
+
+# plot of alightings at specific bus stops within q quarter-mile working radius of MAX Orange Line stations   
+p_al_bs_qm<- ggplot(ridership_bus_stops_quarter_mile_summary1, aes(date, OFFS_SUM)) + geom_smooth() + 
+             geom_point(size=0.75) +ggtitle("Alightings at specific bus stops within a quarter-mile \n walking radius of MAX Orange Line stations") +
+             labs(x="Date", y="Alightings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+             theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                    axis.text = element_text(family="Times",size=8),
+                    axis.title=element_text(family="Times",size=10),
+                    legend.position="bottom",
+                    legend.title=element_text(family="Times",size=10, face="bold"),
+                    legend.text=element_text(family="Times",size=8)) 
+
+p_al_bs_qm
+
+# ggsave(file="output/plots/p_al_bs_qm.png", p_al_bs_qm, width=5, heigh=3.25)  
+
 
 ```
 
