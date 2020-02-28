@@ -22,8 +22,8 @@ p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign, scales, ggrepel)
 load("~/OrangeGreenLines/output/intermediate/ridership_w.RData")
 
 # Load GIS bus stop data of con and exp corridors 
-gl_exp_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Green Line/Corridor2/GL_segment_main2clackamas_0.5m_buffer_busstops.dbf", as.is=TRUE) 
-gl_con_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Green Line/Corridor2/I-5_segment_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+gl_exp_busstops <- read.dbf("~/data/GIS/Green Line/Corridor2/GL_segment_main2clackamas_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+gl_con_busstops <- read.dbf("~/data/GIS/Green Line/Corridor2/I-5_segment_0.5m_buffer_busstops.dbf", as.is=TRUE) 
 
 # 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
 gl_exp_busstops <- gl_exp_busstops %>%
@@ -51,10 +51,9 @@ gl_ridership_w_exp_summary1 <- gl_ridership_w_exp %>%
                                summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
                                ungroup()
 
-# Select routes operate all the time 
+# Select routes operate all the time (Routes start service from 2007-03-04 to present)
 # sort(table(gl_ridership_w_exp_summary1$ROUTE_NUMBER))
 # Route 200 is the MAX Green Line
-# Routes start service from 2007-03-04 to present 
 gl_ridership_w_exp_rt <- gl_ridership_w_exp_summary1 %>%
                           group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION) %>%
                           summarise(date=min(date), 
@@ -329,14 +328,5 @@ p_gl_bd_did_mt
 ```
 
 
-
-
-
-
-
-
-## Traver bus lines 
-```{r}
-
-```
-
+## Traverse bus lines 
+There are not parallel bus lines within the experimental corridors. 
