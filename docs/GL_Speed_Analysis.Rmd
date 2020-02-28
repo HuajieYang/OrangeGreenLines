@@ -1,0 +1,1278 @@
+---
+title: "GL_Speed_Analysis"
+author: "Huajie Yang"
+date: "2/13/2020"
+output: html_document
+---
+
+<style>
+    body .main-container {
+        max-width: 1100px;
+    }
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+options(scipen=100)
+options(digits=3)
+
+if (!require("pacman")) {install.packages("pacman"); library(pacman)}
+p_load(dplyr, lubridate, ggplot2, stargazer, stringr, scales, gridExtra)
+
+```
+
+# Load station metadata
+```{r}
+# Load station metadata ====
+detector_meta <- read.csv("~/OrangeGreenLines/data/metadata/detectors_metadata.csv", stringsAsFactors = F) # detector metadata
+stations_meta <- read.csv("~/OrangeGreenLines/data/metadata/stations_metadata.csv", stringsAsFactors = F) # station metadata
+highways_meta <- read.csv("~/OrangeGreenLines/data/metadata/highways_metadata.csv", stringsAsFactors = F) # highway metadata 
+
+# highway id for  I-205: 3, 4
+# Outside of experimental zone: lat <= 45.37870 (stationid 1040), lat >= 45.51715 (stationid 1016)
+# 3114 and 3197 are not included in data_5min 
+
+# Select stations of I-205 north
+stations_I205_north <- stations_meta %>% 
+  filter(highwayid %in% c(3), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid,lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream) %>%
+  filter(!is.na(lat) & (lat > 45.4296 & lat < 45.5608) & stationid<5000) %>%
+  arrange(stationid)
+
+# Select stations of I-205 south 
+stations_I205_south <- stations_meta %>% 
+  filter(highwayid %in% c(4), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid,lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream) %>%
+  filter(!is.na(lat) & (lat > 45.4296 & lat < 45.5608) & stationid<5000) %>%
+  arrange(stationid)
+
+# Select stations of I-5 north
+# Outside of experimental zone: lat <= 45.37870 (stationid 1040), lat >= 45.51715 (stationid 1016)
+# 3114 and 3197 are not included in data_5min 
+stations_I5_north <- stations_meta %>% 
+  filter(highwayid %in% c(1), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream) %>%
+  filter(!is.na(lat)&(lat < 45.5171 & lat > 45.3788))  %>%
+  filter(stationid %in% c(1009:1015)) %>% # select stations after 
+  arrange(stationid)
+
+# Select stations of I-5 south
+stations_I5_south <- stations_meta %>% 
+  filter(highwayid %in% c(2), start_date=="2004-01-01 00:00:00-08") %>% 
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream) %>%
+  filter(!is.na(lat)&(lat < 45.5171 & lat > 45.3788))  %>%
+  filter(stationid %in% c(1108, 1107, 1105, 1036)) %>%
+  arrange(stationid)
+
+# I-84 east bound stations 
+# 1097 is too close to downtown 
+# locationtext, length, upstream, 
+# downstream, numberlanes, length_mid, downstream_mile, 
+# upstream_mile, opposite_stationid, start_date, end_date
+stations_I84 <- stations_meta %>% 
+  filter(highwayid %in% c(7, 8), start_date=="2004-01-01 00:00:00-08") 
+
+# East bound 
+stations_I84_east <- stations_I84 %>%
+  filter(highwayid %in% c(7), stationid %in% c(1055, 1056, 1057, 1127)) %>%
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream)
+
+# West bound 
+# stattionid: milestone of 1147 is not right
+stations_I84_west <- stations_I84 %>%
+  filter(highwayid %in% c(8), stationid %in% c(1059, 1060, 1061, 1062)) %>%
+  select(stationid, lat, lon, highwayid, locationtext, start_date, end_date, milepost, length, upstream, downstream)
+
+
+# stations of I5&I205 both directions 
+stations_I5_I205_I84_bd <- rbind(stations_I205_north, stations_I205_south, stations_I5_north, stations_I5_south, stations_I84_east, stations_I84_west)
+
+```
+
+# Organize speed data 
+```{r}
+# # Load data
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0405_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0506_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0607_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0708_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0809_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_0910_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_1011_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_1112_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_1213_green.RData")
+# load("~/OrangeGreenLines/output/intermediate/data_5min_1314_green.RData")
+# 
+# # 2004 ~ 2006 dataset 
+# data_5min_0405_green <- data_5min_0405_green %>%
+#   filter(!(starttime %in% c("2004-12-31 23:55:00-08", "2005-09-12 00:00:00-07")))
+# 
+# data_5min_0506_green <- data_5min_0506_green %>%
+#   filter(starttime!="2006-09-12 00:00:00-07")
+# 
+# data_5min_0406_green <- rbind(data_5min_0405_green, data_5min_0506_green) %>%
+#   mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
+#          date=as.Date(starttime),
+#          day_week=weekdays(date),
+#          before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          time_hour=hour(date_time),
+#          time_min5=minute(date_time),
+#          AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
+#          AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
+#          ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
+#   select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, time_hour, time_min5,
+#          AM_PM, speed, volume)  %>% #
+#   arrange(highwayid, stationid, lanenumber, detector_id, date_time)
+# 
+# 
+# data_5min_0406_I5_I205_I84_bd <- data_5min_0406_green %>%
+#                                   filter(stationid %in% stations_I5_I205_I84_bd$stationid) 
+# 
+# # 2006 - 2008 
+# data_5min_0607_green <- data_5min_0607_green %>%
+#   filter(starttime!="2007-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_0708_green <- data_5min_0708_green %>%
+#   filter(starttime!="2005-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_0608_green <- rbind(data_5min_0607_green, data_5min_0708_green) %>%
+#   mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
+#          date=as.Date(starttime),
+#          day_week=weekdays(date),
+#          before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          time_hour=hour(date_time),
+#          time_min5=minute(date_time),
+#          AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
+#          AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
+#          ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
+#   select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, time_hour, time_min5,
+#          AM_PM, speed, volume)  %>% #
+#   arrange(highwayid, stationid, lanenumber, detector_id, date_time)
+# 
+# 
+# data_5min_0608_I5_I205_I84_bd <- data_5min_0608_green %>%
+#   filter(stationid %in% stations_I5_I205_I84_bd$stationid) 
+# 
+# # 2008 ~ 2010 
+# data_5min_0809_green <- data_5min_0809_green %>%
+#   filter(starttime!="2009-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_0910_green <- data_5min_0910_green %>%
+#   filter(starttime!="2010-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_0810_green <- rbind(data_5min_0809_green, data_5min_0910_green) %>%
+#   mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
+#          date=as.Date(starttime),
+#          day_week=weekdays(date),
+#          before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          time_hour=hour(date_time),
+#          time_min5=minute(date_time),
+#          AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
+#          AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
+#          ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
+#   select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, time_hour, time_min5,
+#          AM_PM, speed, volume)  %>% #
+#   arrange(highwayid, stationid, lanenumber, detector_id, date_time)
+# 
+# data_5min_0810_I5_I205_I84_bd <- data_5min_0810_green %>%
+#   filter(stationid %in% stations_I5_I205_I84_bd$stationid) 
+# 
+# # 2010 ~ 2012 
+# data_5min_1011_green <- data_5min_1011_green %>%
+#   filter(starttime!="2011-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_1112_green <- data_5min_1112_green %>%
+#   filter(starttime!="2012-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# 
+# data_5min_1012_green <- rbind(data_5min_1011_green, data_5min_1112_green) %>%
+#   mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
+#          date=as.Date(starttime),
+#          day_week=weekdays(date),
+#          before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          time_hour=hour(date_time),
+#          time_min5=minute(date_time),
+#          AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
+#          AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
+#          ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
+#   select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, time_hour, time_min5,
+#          AM_PM, speed, volume)  %>% #
+#   arrange(highwayid, stationid, lanenumber, detector_id, date_time)
+# 
+# data_5min_1012_I5_I205_I84_bd <- data_5min_1012_green %>%
+#   filter(stationid %in% stations_I5_I205_I84_bd$stationid) 
+# 
+# 
+# # 2012-2014 
+# data_5min_1213_green <- data_5min_1213_green %>%
+#   filter(starttime!="2013-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955)))
+# 
+# data_5min_1314_green <- data_5min_1314_green %>%
+#   filter(starttime!="2014-09-12 00:00:00-07") %>% 
+#   filter(!(detector_id %in% c(1949, 1950, 1951, 1953, 1954, 1955, 
+#                               100369, 100370, 100374, 100375, 100376, 
+#                               100435, 100436, 100437)))
+# 
+# data_5min_1214_green <- rbind(data_5min_1213_green, data_5min_1314_green) %>%
+#   mutate(date_time=ymd_hms(substr(starttime, 1, nchar(starttime)-3)),
+#          date=as.Date(starttime),
+#          day_week=weekdays(date),
+#          before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          time_hour=hour(date_time),
+#          time_min5=minute(date_time),
+#          AM_PM=ifelse(time_hour %in% c(6, 7, 8, 9), "AM", "NonPeak"),
+#          AM_PM=ifelse(time_hour %in% c(16, 17, 18, 19), "PM", AM_PM),
+#          ec_group=ifelse(highwayid %in% c(1,2), "control", "experimental")) %>%
+#   select(highwayid, stationid, lanenumber, detector_id, starttime, date_time, date, day_week, time_hour, time_min5,
+#          AM_PM, speed, volume)  %>% #
+#   arrange(highwayid, stationid, lanenumber, detector_id, date_time)
+# 
+# data_5min_1214_I5_I205_I84_bd <- data_5min_1214_green %>%
+#   filter(stationid %in% stations_I5_I205_I84_bd$stationid)
+# 
+# 
+# # Combine data 
+# data_5min_0414_I5_I205_I84_bd <- rbind(data_5min_0406_I5_I205_I84_bd, data_5min_0608_I5_I205_I84_bd, data_5min_0810_I5_I205_I84_bd, 
+#                                        data_5min_1012_I5_I205_I84_bd, data_5min_1214_I5_I205_I84_bd)
+
+```
+
+# Convert station level data to route level data 
+```{r}
+# # Extract data 
+# # I-5  
+# data_5min_0414_green_I5_north <- data_5min_0414_I5_I205_I84_bd %>%
+#   filter(stationid %in% stations_I5_north$stationid)  %>%
+#   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#   # select(-date_time) %>%
+#   left_join(stations_I5_north) %>%
+#   arrange(date, time_hour, time_min5, stationid)%>%
+#   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#          r_length=ifelse(stationid %in% c(1045, 1048), length/2, length), # Calculation is based on length and geometry 
+#          r_time=ifelse(stationid %in% c(1045, 1048), (length/2)/speed, length/speed))
+# 
+# 
+# data_5min_0414_green_I5_south <- data_5min_0414_I5_I205_I84_bd %>%
+#   filter(stationid %in% stations_I5_south$stationid)  %>%
+#   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#   # select(-date_time) %>%
+#   left_join(stations_I5_south) %>%
+#   arrange(date, time_hour, time_min5, stationid)%>%
+#   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#          r_length=ifelse(stationid %in% c(1036, 1105), length/2, length), # Calculation is based on length and geometry 
+#          r_time=ifelse(stationid %in% c(1036, 1105), (length/2)/speed, length/speed))
+# 
+# # I-84  
+# data_5min_0414_green_I84_east <- data_5min_0414_I5_I205_I84_bd %>%
+#                                   filter(stationid %in% stations_I84_east$stationid)  %>%
+#                                   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#                                   # select(-date_time) %>%
+#                                   left_join(stations_I84_east) %>%
+#                                   arrange(date, time_hour, time_min5, stationid)%>%
+#                                   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#                                          r_length=ifelse(stationid %in% c(1055, 1057), length/2, length), # Length of stationid 1127 is not available
+#                                          r_time=ifelse(stationid %in% c(1055, 1057), (length/2)/speed, length/speed))
+# 
+# data_5min_0414_green_I84_west <- data_5min_0414_I5_I205_I84_bd %>%
+#                                   filter(stationid %in% stations_I84_west$stationid)  %>%
+#                                   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#                                   # select(-date_time) %>%
+#                                   left_join(stations_I84_west) %>%
+#                                   arrange(date, time_hour, time_min5, stationid)%>%
+#                                   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#                                          r_length=ifelse(stationid %in% c(1062, 1059), length/2, length), # Length of stationid 1127 is not available
+#                                          r_time=ifelse(stationid %in% c(1062, 1059), (length/2)/speed, length/speed))
+# 
+# # I-205 
+# # Stationid 1143 is not included in dataset 
+# data_5min_0414_green_I205_south <- data_5min_0414_I5_I205_I84_bd %>%
+#   filter(stationid %in% stations_I205_south$stationid)  %>%
+#   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#   # select(-date_time) %>%
+#   left_join(stations_I205_south) %>%
+#   arrange(date, time_hour, time_min5, stationid)%>%
+#   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#          r_length=ifelse(stationid %in% c(1051, 1125), length/2, length),
+#          r_time=ifelse(stationid %in% c(1051, 1125), (length/2)/speed, length/speed))
+# 
+# data_5min_0414_green_I205_north <- data_5min_0414_I5_I205_I84_bd %>%
+#   filter(stationid %in% stations_I205_north$stationid)  %>%
+#   filter(lanenumber==1, AM_PM %in% c("AM", "PM")) %>%
+#   # select(-date_time) %>%
+#   left_join(stations_I205_north) %>%
+#   arrange(date, time_hour, time_min5, stationid)%>%
+#   mutate(id=paste(highwayid, date, time_hour, time_min5, sep="_"),
+#          r_length=ifelse(stationid %in% c(1045, 1048), length/2, length),
+#          r_time=ifelse(stationid %in% c(1045, 1048), (length/2)/speed, length/speed))
+# 
+# # aggregate data by route and peak periods
+# # I-5  
+# data_5min_0414_green_I5_north_route <- data_5min_0414_green_I5_north %>%
+#   filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#   group_by(date, AM_PM, time_hour, time_min5) %>%
+#   summarise(r_length=sum(r_length),
+#             r_time=sum(r_time),
+#             volume_route=sum(volume)) %>%
+#   ungroup() %>%
+#   mutate(r_speed=r_length/r_time)
+# 
+# data_5min_0414_green_I5_south_route <- data_5min_0414_green_I5_south %>%
+#   filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#   group_by(date, AM_PM, time_hour, time_min5) %>%
+#   summarise(r_length=sum(r_length),
+#             r_time=sum(r_time),
+#             volume_route=sum(volume)) %>%
+#   ungroup() %>%
+#   mutate(r_speed=r_length/r_time)
+# 
+# data_pp_0414_green_I5_north_route <- data_5min_0414_green_I5_north_route %>%
+#   group_by(date, AM_PM) %>%
+#   summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#   ungroup() %>%
+#   mutate(Group=0,
+#          Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          roadway="I-5 North")
+# 
+# data_pp_0414_green_I5_south_route <- data_5min_0414_green_I5_south_route %>%
+#   group_by(date, AM_PM) %>%
+#   summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#   ungroup() %>%
+#   mutate(Group=0,
+#          Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          roadway="I-5 South")
+# 
+# # I-84 dataset 
+# data_5min_0414_green_I84_east_route <- data_5min_0414_green_I84_east %>%
+#                                         filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#                                         group_by(date, AM_PM, time_hour, time_min5) %>%
+#                                         summarise(r_length=sum(r_length),
+#                                                   r_time=sum(r_time),
+#                                                   volume_route=sum(volume)) %>%
+#                                         ungroup() %>%
+#                                         mutate(r_speed=r_length/r_time)
+# 
+# data_5min_0414_green_I84_west_route <- data_5min_0414_green_I84_west %>%
+#                                         filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#                                         group_by(date, AM_PM, time_hour, time_min5) %>%
+#                                         summarise(r_length=sum(r_length),
+#                                                   r_time=sum(r_time),
+#                                                   volume_route=sum(volume)) %>%
+#                                         ungroup() %>%
+#                                         mutate(r_speed=r_length/r_time)
+# 
+# data_pp_0414_green_I84_east_route <- data_5min_0414_green_I84_east_route %>%
+#                                       group_by(date, AM_PM) %>%
+#                                       summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#                                       ungroup() %>%
+#                                       mutate(Group=1,
+#                                              Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#                                              roadway="I-84 East")
+# 
+# data_pp_0414_green_I84_west_route <- data_5min_0414_green_I84_west_route %>%
+#                                       group_by(date, AM_PM) %>%
+#                                       summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#                                       ungroup() %>%
+#                                       mutate(Group=1,
+#                                              Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#                                              roadway="I-84 West")
+# 
+# # I-205 
+# data_5min_0414_green_I205_north_route <- data_5min_0414_green_I205_north %>%
+#   filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#   group_by(date, AM_PM, time_hour, time_min5) %>%
+#   summarise(r_length=sum(r_length),
+#             r_time=sum(r_time),
+#             volume_route=sum(volume)) %>%
+#   ungroup() %>%
+#   mutate(r_speed=r_length/r_time)
+# 
+# data_5min_0414_green_I205_south_route <- data_5min_0414_green_I205_south %>%
+#   filter(!(day_week %in% c("Saturday", "Sunday"))) %>%
+#   group_by(date, AM_PM, time_hour, time_min5) %>%
+#   summarise(r_length=sum(r_length),
+#             r_time=sum(r_time),
+#             volume_route=sum(volume)) %>%
+#   ungroup() %>%
+#   mutate(r_speed=r_length/r_time)
+# 
+# data_pp_0414_green_I205_north_route <- data_5min_0414_green_I205_north_route %>%
+#   group_by(date, AM_PM) %>%
+#   summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#   ungroup()  %>%
+#   mutate(Group=1,
+#          Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          roadway="I-205 North")
+# 
+# data_pp_0414_green_I205_south_route <- data_5min_0414_green_I205_south_route %>%
+#   group_by(date, AM_PM) %>%
+#   summarise(r_speed=weighted.mean(r_speed, volume_route)) %>%
+#   ungroup()  %>%
+#   mutate(Group=1,
+#          Before_after=ifelse(date < ymd("2009-09-12"), 0, 1),
+#          roadway="I-205 South")
+# 
+# # Combine data 
+# GL_DID_0414_I5_I205_I84_bd_df <- rbind(data_pp_0414_green_I5_north_route, data_pp_0414_green_I5_south_route, 
+#                                        data_pp_0414_green_I205_north_route, data_pp_0414_green_I205_south_route,
+#                                        data_pp_0414_green_I84_east_route, data_pp_0414_green_I84_west_route) %>%
+#                                 mutate(year_1st=ifelse(date>="2009-09-12"&date<="2010-09-11", 1, 0),
+#                                        year_2nd=ifelse(date>="2010-09-12"&date<="2011-09-11", 1, 0),
+#                                        year_3rd=ifelse(date>="2011-09-12"&date<="2012-09-11", 1, 0),
+#                                        year_4th=ifelse(date>="2012-09-12"&date<="2013-09-11", 1, 0),
+#                                        year_5th=ifelse(date>="2013-09-12"&date<="2014-09-11", 1, 0))
+# 
+# 
+# save(GL_DID_0414_I5_I205_I84_bd_df, file="~/OrangeGreenLines/output/intermediate/GL_DID_0414_I5_I205_I84_bd_df.RData")
+
+load("~/OrangeGreenLines/output/intermediate/GL_DID_0414_I5_I205_I84_bd_df.RData")
+```
+
+
+# # 09/12/2004 - 09/11/2014 analysis 
+## Plot speed data 
+```{r}
+P_AM_inbound_0414_I5_I205_I84 <- ggplot(data=GL_DID_0414_I5_I205_I84_bd_df %>% 
+                                          filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North", "I-84 West")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Inbound to CBD speed for AM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_AM_inbound_0414_I5_I205_I84
+
+
+P_PM_inbound_0414_I5_I205_I84 <- ggplot(data=GL_DID_0414_I5_I205_I84_bd_df %>% 
+                                          filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North", "I-84 West")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Inbound to CBD speed for PM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_PM_inbound_0414_I5_I205_I84
+
+P_AM_outbound_0414_I5_I205_I84 <- ggplot(data=GL_DID_0414_I5_I205_I84_bd_df %>% 
+                                           filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South", "I-84 East")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Outbound to CBD speed for AM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_AM_outbound_0414_I5_I205_I84
+
+
+P_PM_outbound_0414_I5_I205_I84 <- ggplot(data=GL_DID_0414_I5_I205_I84_bd_df %>% 
+                                      filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South", "I-84 East")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Outbound to CBD speed for PM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_PM_outbound_0414_I5_I205_I84
+```
+
+## Base DID models 
+```{r}
+# Base DID regression  models 
+# Inbound 
+GL_DID_0414_AM_inbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                    data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-84 West")))
+GL_DID_0414_PM_inbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                    data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0414_AM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+GL_DID_0414_PM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0414_AM_outbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-84 East")))
+GL_DID_0414_PM_outbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after,
+                                     data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0414_AM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                      data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+GL_DID_0414_PM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after,
+                                      data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+```
+
+### Using I-84 as the experimental corridor 
+```{r}
+# Using I-84 as the experimental corridor 
+stargazer(GL_DID_0414_AM_inbound_I5_I84, GL_DID_0414_PM_inbound_I5_I84,  GL_DID_0414_AM_outbound_I5_I84, GL_DID_0414_PM_outbound_I5_I84,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Plot the DID results with I-84 as the experimental corridor ====
+# Plot 
+# Specify base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# GL speed base models
+sp_ami_day_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_AM_inbound_I5_I84)$coefficient[, 1]))
+sp_pmi_day_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_PM_inbound_I5_I84)$coefficient[, 1]))
+sp_amo_day_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_AM_outbound_I5_I84)$coefficient[, 1]))
+sp_pmo_day_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_PM_outbound_I5_I84)$coefficient[, 1]))
+
+sp_did_0414_AM_outbound_I5_I84_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                                                Before_after=rep(c("before", "after"), 3),
+                                                sp_ami_day_I5_I84_speed=as.numeric(sp_ami_day_coef_mx_I5_I84 %*% bm_mx),
+                                                sp_pmi_day_I5_I84_speed=as.numeric(sp_pmi_day_coef_mx_I5_I84 %*% bm_mx),
+                                                sp_amo_day_I5_I84_speed=as.numeric(sp_amo_day_coef_mx_I5_I84 %*% bm_mx),
+                                                sp_pmo_day_I5_I84_speed=as.numeric(sp_pmo_day_coef_mx_I5_I84 %*% bm_mx)) 
+
+sp_did_0414_AM_outbound_I5_I84_df$Before_after <- relevel(sp_did_0414_AM_outbound_I5_I84_df$Before_after, "before")
+
+
+sp_ami_I5_I84_day_speed_df <- sp_did_0414_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_ami_day_I5_I84_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Inbound")
+
+sp_pmi_I5_I84_day_speed_df <- sp_did_0414_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_pmi_day_I5_I84_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Inbound")
+
+sp_amo_I5_I84_day_speed_df <- sp_did_0414_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_amo_day_I5_I84_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Outbound")
+
+sp_pmo_I5_I84_day_speed_df <- sp_did_0414_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_pmo_day_I5_I84_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Outbound")
+
+sp_did_I5_I84_df_long <- rbind(sp_ami_I5_I84_day_speed_df, sp_pmi_I5_I84_day_speed_df, sp_amo_I5_I84_day_speed_df, sp_pmo_I5_I84_day_speed_df)%>%
+  mutate(Scenario=paste(AM_PM, Direction, sep=" "),
+         Before_after=ifelse(Before_after=="after", 1, 0))
+
+# Plot of two peak periods and two directions  
+p_sp_I5_I84_did_4g <-  ggplot(sp_did_I5_I84_df_long, aes(x=Before_after, y=Speed, group=Group)) +
+  geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
+  xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+  ggtitle("DID models for weekday peak periods speed & I-84 as the experimental corridor") +  facet_grid(AM_PM ~ Direction) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) 
+
+p_sp_I5_I84_did_4g
+```
+
+### Using I-205 as the experimental corridor 
+```{r}
+# Using I-205 as the experimental corridor 
+stargazer(GL_DID_0414_AM_inbound_I5_I205, GL_DID_0414_PM_inbound_I5_I205,  GL_DID_0414_AM_outbound_I5_I205, GL_DID_0414_PM_outbound_I5_I205,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-205 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Plot DID results with the I-205 as the experimental corridor 
+# Specify base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# GL speed base models
+sp_ami_day_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_AM_inbound_I5_I205)$coefficient[, 1]))
+sp_pmi_day_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_PM_inbound_I5_I205)$coefficient[, 1]))
+sp_amo_day_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_AM_outbound_I5_I205)$coefficient[, 1]))
+sp_pmo_day_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_PM_outbound_I5_I205)$coefficient[, 1]))
+
+sp_did_0414_AM_outbound_I5_I205_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                                                 Before_after=rep(c("before", "after"), 3),
+                                                 sp_ami_day_I5_I205_speed=as.numeric(sp_ami_day_coef_mx_I5_I205 %*% bm_mx),
+                                                 sp_pmi_day_I5_I205_speed=as.numeric(sp_pmi_day_coef_mx_I5_I205 %*% bm_mx),
+                                                 sp_amo_day_I5_I205_speed=as.numeric(sp_amo_day_coef_mx_I5_I205 %*% bm_mx),
+                                                 sp_pmo_day_I5_I205_speed=as.numeric(sp_pmo_day_coef_mx_I5_I205 %*% bm_mx)) 
+
+sp_did_0414_AM_outbound_I5_I205_df$Before_after <- relevel(sp_did_0414_AM_outbound_I5_I205_df$Before_after, "before")
+
+
+sp_ami_I5_I205_day_speed_df <- sp_did_0414_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_ami_day_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Inbound")
+
+sp_pmi_I5_I205_day_speed_df <- sp_did_0414_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmi_day_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Inbound")
+
+sp_amo_I5_I205_day_speed_df <- sp_did_0414_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_amo_day_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Outbound")
+
+sp_pmo_I5_I205_day_speed_df <- sp_did_0414_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmo_day_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Outbound")
+
+sp_did_I5_I205_df_long <- rbind(sp_ami_I5_I205_day_speed_df, sp_pmi_I5_I205_day_speed_df, sp_amo_I5_I205_day_speed_df, sp_pmo_I5_I205_day_speed_df)%>%
+  mutate(Scenario=paste(AM_PM, Direction, sep=" "),
+         Before_after=ifelse(Before_after=="after", 1, 0))
+
+# Plot of two peak periods and two directions  
+p_sp_I5_I205_did_4g <-  ggplot(sp_did_I5_I205_df_long, aes(x=Before_after, y=Speed, group=Group)) +
+  geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
+  xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+  ggtitle("DID models for weekday peak periods speed & I-84 as the experimental corridor") +  facet_grid(AM_PM ~ Direction) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) 
+
+p_sp_I5_I205_did_4g
+
+```
+
+## Multiple time periods DID models 
+```{r}
+# Multiple time periods DID models and plot====
+
+# Inbound 
+GL_DID_0414_AM_inbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                         year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                       data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0414_PM_inbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                         year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                       data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0414_AM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+
+GL_DID_0414_PM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0414_AM_outbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0414_PM_outbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0414_AM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+
+GL_DID_0414_PM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0414_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+```
+
+### Using I-84 as the experimental corridor 
+```{r}
+stargazer(GL_DID_0414_AM_inbound_I5_I84_mt, GL_DID_0414_PM_inbound_I5_I84_mt,  GL_DID_0414_AM_outbound_I5_I84_mt, GL_DID_0414_PM_outbound_I5_I84_mt,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          # covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Using I-84 as the experimental corridor 
+mt_5yd_mx <- matrix(c(rep(1, 6),
+                      rep(1, 6),
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1), nrow=12, byrow=TRUE)
+
+gl_sp_ami_did_mt_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_AM_inbound_I5_I84_mt)$coefficient[, 1]))
+gl_sp_pmi_did_mt_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_PM_inbound_I5_I84_mt)$coefficient[, 1]))
+
+gl_sp_amo_did_mt_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_AM_outbound_I5_I84_mt)$coefficient[, 1]))
+gl_sp_pmo_did_mt_coef_mx_I5_I84 <- t(as.matrix(summary(GL_DID_0414_PM_outbound_I5_I84_mt)$coefficient[, 1]))
+
+
+gl_sp_ami_did_mt_df_I5_I84 <- data.frame(AM_PM="AM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_ami_did_mt_coef_mx_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_pmi_did_mt_df_I5_I84 <- data.frame(AM_PM="PM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmi_did_mt_coef_mx_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_amo_did_mt_df_I5_I84 <- data.frame(AM_PM="AM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_amo_did_mt_coef_mx_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_pmo_did_mt_df_I5_I84 <- data.frame(AM_PM="PM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmo_did_mt_coef_mx_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_did_5yd_df_long_I5_I84 <- rbind(gl_sp_ami_did_mt_df_I5_I84, gl_sp_pmi_did_mt_df_I5_I84,
+                                      gl_sp_amo_did_mt_df_I5_I84, gl_sp_pmo_did_mt_df_I5_I84) %>%
+  mutate(Group=paste(AM_PM, Direction, sep=" "))
+
+
+gl_p_I5_I84_sp_did_5yd_int_4g <-  ggplot(gl_sp_did_5yd_df_long_I5_I84, aes(x=TreatTime, y=Speed, group=Group, color=Group)) +
+  geom_line() + geom_point() + 
+  # geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
+  # geom_hline(yintercept = c(57.3, 54.1, 73.6, 54.5), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Speed (MPH)") + # ylim(40, 70) +
+  ggtitle("Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) + guides(colour =guide_legend(ncol=2))
+
+gl_p_I5_I84_sp_did_5yd_int_4g
+```
+
+### Using I-205 as the experimental corridor 
+```{r}
+stargazer(GL_DID_0414_AM_inbound_I5_I205_mt, GL_DID_0414_PM_inbound_I5_I205_mt,  GL_DID_0414_AM_outbound_I5_I205_mt, GL_DID_0414_PM_outbound_I5_I205_mt,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-205 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+
+# Using I-205 as the exerimental corridor
+gl_sp_ami_did_mt_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_AM_inbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmi_did_mt_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_PM_inbound_I5_I205_mt)$coefficient[, 1]))
+
+gl_sp_amo_did_mt_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_AM_outbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmo_did_mt_coef_mx_I5_I205 <- t(as.matrix(summary(GL_DID_0414_PM_outbound_I5_I205_mt)$coefficient[, 1]))
+
+
+gl_sp_ami_did_mt_df_I5_I205 <- data.frame(AM_PM="AM peak",
+                                          Direction="Inbound",
+                                          TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                           levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                          Speed=as.numeric(gl_sp_ami_did_mt_coef_mx_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmi_did_mt_df_I5_I205 <- data.frame(AM_PM="PM peak",
+                                          Direction="Inbound",
+                                          TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                           levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                          Speed=as.numeric(gl_sp_pmi_did_mt_coef_mx_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_amo_did_mt_df_I5_I205 <- data.frame(AM_PM="AM peak",
+                                          Direction="Outbound",
+                                          TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                           levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                          Speed=as.numeric(gl_sp_amo_did_mt_coef_mx_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmo_did_mt_df_I5_I205 <- data.frame(AM_PM="PM peak",
+                                          Direction="Outbound",
+                                          TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                           levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                          Speed=as.numeric(gl_sp_pmo_did_mt_coef_mx_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_did_5yd_df_long_I5_I205 <- rbind(gl_sp_ami_did_mt_df_I5_I205, gl_sp_pmi_did_mt_df_I5_I205,
+                                       gl_sp_amo_did_mt_df_I5_I205, gl_sp_pmo_did_mt_df_I5_I205) %>%
+  mutate(Group=paste(AM_PM, Direction, sep=" "))
+
+
+gl_p_I5_I205_sp_did_5yd_int_4g <-  ggplot(gl_sp_did_5yd_df_long_I5_I205, aes(x=TreatTime, y=Speed, group=Group, color=Group)) +
+  geom_line() + geom_point() + 
+  # geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
+  # geom_hline(yintercept = c(57.3, 54.1, 73.6, 54.5), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Speed (MPH)") + # ylim(40, 70) +
+  ggtitle("Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) + guides(colour =guide_legend(ncol=2))
+
+gl_p_I5_I205_sp_did_5yd_int_4g
+```
+
+# 09/12/2008 - 09/11/2014
+```{r}
+GL_DID_0814_I5_I205_I84_bd_df <- GL_DID_0414_I5_I205_I84_bd_df %>%
+                                 filter(date>="2008-09-12")
+```
+
+## Plot speed data 
+```{r}
+P_AM_inbound_0814_I5_I205_I84 <- ggplot(data=GL_DID_0814_I5_I205_I84_bd_df %>% 
+                                          filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North", "I-84 West")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Inbound to CBD speed for AM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_AM_inbound_0814_I5_I205_I84
+
+
+P_PM_inbound_0814_I5_I205_I84 <- ggplot(data=GL_DID_0814_I5_I205_I84_bd_df %>% 
+                                          filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North", "I-84 West")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Inbound to CBD speed for PM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 North", "I-205 North", "I-84 West"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_PM_inbound_0814_I5_I205_I84
+
+P_AM_outbound_0814_I5_I205_I84 <- ggplot(data=GL_DID_0814_I5_I205_I84_bd_df %>% 
+                                           filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South", "I-84 East")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Outbound to CBD speed for AM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_AM_outbound_0814_I5_I205_I84
+
+
+P_PM_outbound_0814_I5_I205_I84 <- ggplot(data=GL_DID_0814_I5_I205_I84_bd_df %>% 
+                                      filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South", "I-84 East")), aes(x=date, y=r_speed, group=roadway)) +
+  geom_point(aes(colour=roadway)) + geom_smooth(aes(linetype=roadway), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), size=0.5)+ ggtitle("Outbound to CBD speed for PM peak") + #  +  ylim(0, 50) 
+  labs( x="Date", y="Average speed (mph)") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_colour_discrete(name="Roadways",
+                        breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                        labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)")) +
+  scale_linetype_discrete(name="Roadways",
+                          breaks=c("I-5 South", "I-205 South", "I-84 East"),
+                          labels=c("I-5 (Control)", "I-205 (Experimental)", "I-84 (Experimental)"))  
+P_PM_outbound_0814_I5_I205_I84
+```
+
+## Base DID model 
+```{r}
+# Base DID regression  models 
+# Inbound 
+GL_DID_0814_AM_inbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                    data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-84 West")))
+GL_DID_0814_PM_inbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                    data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0814_AM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+GL_DID_0814_PM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0814_AM_outbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-84 East")))
+GL_DID_0814_PM_outbound_I5_I84 <- lm(r_speed ~ Before_after + Group + Group*Before_after,
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0814_AM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                      data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+GL_DID_0814_PM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after,
+                                      data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+```
+
+### Using I-84 as the experimental corridor 
+```{r}
+# Using I-84 as the experimental corridor 
+stargazer(GL_DID_0814_AM_inbound_I5_I84, GL_DID_0814_PM_inbound_I5_I84,  GL_DID_0814_AM_outbound_I5_I84, GL_DID_0814_PM_outbound_I5_I84,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Plot the DID results with I-84 as the experimental corridor ====
+# Plot 
+# Specify base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# GL speed base models
+sp_ami_day_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I84)$coefficient[, 1]))
+sp_pmi_day_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I84)$coefficient[, 1]))
+sp_amo_day_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I84)$coefficient[, 1]))
+sp_pmo_day_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I84)$coefficient[, 1]))
+
+sp_did_0814_AM_outbound_I5_I84_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                                                Before_after=rep(c("before", "after"), 3),
+                                                sp_ami_day_0814_I5_I84_speed=as.numeric(sp_ami_day_coef_mx_0814_I5_I84 %*% bm_mx),
+                                                sp_pmi_day_0814_I5_I84_speed=as.numeric(sp_pmi_day_coef_mx_0814_I5_I84 %*% bm_mx),
+                                                sp_amo_day_0814_I5_I84_speed=as.numeric(sp_amo_day_coef_mx_0814_I5_I84 %*% bm_mx),
+                                                sp_pmo_day_0814_I5_I84_speed=as.numeric(sp_pmo_day_coef_mx_0814_I5_I84 %*% bm_mx)) 
+
+sp_did_0814_AM_outbound_I5_I84_df$Before_after <- relevel(sp_did_0814_AM_outbound_I5_I84_df$Before_after, "before")
+
+
+sp_ami_0814_I5_I84_day_speed_df <- sp_did_0814_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_ami_day_0814_I5_I84_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Inbound")
+
+sp_pmi_0814_I5_I84_day_speed_df <- sp_did_0814_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_pmi_day_0814_I5_I84_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Inbound")
+
+sp_amo_0814_I5_I84_day_speed_df <- sp_did_0814_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_amo_day_0814_I5_I84_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Outbound")
+
+sp_pmo_0814_I5_I84_day_speed_df <- sp_did_0814_AM_outbound_I5_I84_df %>%
+  select(Group, Before_after, Speed=sp_pmo_day_0814_I5_I84_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Outbound")
+
+sp_did_0814_I5_I84_df_long <- rbind(sp_ami_0814_I5_I84_day_speed_df, sp_pmi_0814_I5_I84_day_speed_df, 
+                                    sp_amo_0814_I5_I84_day_speed_df, sp_pmo_0814_I5_I84_day_speed_df)%>%
+                              mutate(Scenario=paste(AM_PM, Direction, sep=" "),
+                                     Before_after=ifelse(Before_after=="after", 1, 0))
+
+# Plot of two peak periods and two directions  
+p_sp_0814_I5_I84_did_4g <-  ggplot(sp_did_0814_I5_I84_df_long, aes(x=Before_after, y=Speed, group=Group)) +
+  geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
+  xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+  ggtitle("DID models for weekday peak periods speed & I-84 as the experimental corridor") +  facet_grid(AM_PM ~ Direction) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) 
+
+p_sp_0814_I5_I84_did_4g
+```
+
+### Using I-205 as the experimental corridor 
+```{r}
+# Using I-84 as the experimental corridor 
+stargazer(GL_DID_0814_AM_inbound_I5_I205, GL_DID_0814_PM_inbound_I5_I205,  GL_DID_0814_AM_outbound_I5_I205, GL_DID_0814_PM_outbound_I5_I205,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Plot the DID results with I-84 as the experimental corridor ====
+# Plot 
+# Specify base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# GL speed base models
+sp_ami_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I205)$coefficient[, 1]))
+sp_pmi_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I205)$coefficient[, 1]))
+sp_amo_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I205)$coefficient[, 1]))
+sp_pmo_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I205)$coefficient[, 1]))
+
+sp_did_0814_AM_outbound_I5_I205_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                                                Before_after=rep(c("before", "after"), 3),
+                                                sp_ami_day_0814_I5_I205_speed=as.numeric(sp_ami_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_pmi_day_0814_I5_I205_speed=as.numeric(sp_pmi_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_amo_day_0814_I5_I205_speed=as.numeric(sp_amo_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_pmo_day_0814_I5_I205_speed=as.numeric(sp_pmo_day_coef_mx_0814_I5_I205 %*% bm_mx)) 
+
+sp_did_0814_AM_outbound_I5_I205_df$Before_after <- relevel(sp_did_0814_AM_outbound_I5_I205_df$Before_after, "before")
+
+
+sp_ami_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_ami_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Inbound")
+
+sp_pmi_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmi_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Inbound")
+
+sp_amo_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_amo_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Outbound")
+
+sp_pmo_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmo_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Outbound")
+
+sp_did_0814_I5_I205_df_long <- rbind(sp_ami_0814_I5_I205_day_speed_df, sp_pmi_0814_I5_I205_day_speed_df, 
+                                    sp_amo_0814_I5_I205_day_speed_df, sp_pmo_0814_I5_I205_day_speed_df)%>%
+  mutate(Scenario=paste(AM_PM, Direction, sep=" "),
+         Before_after=ifelse(Before_after=="after", 1, 0))
+
+# Plot of two peak periods and two directions  
+p_sp_0814_I5_I205_did_4g <-  ggplot(sp_did_0814_I5_I205_df_long, aes(x=Before_after, y=Speed, group=Group)) +
+  geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
+  xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+  ggtitle("DID models for weekday peak periods speed & I-84 as the experimental corridor") +  facet_grid(AM_PM ~ Direction) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) 
+
+p_sp_0814_I5_I205_did_4g
+```
+
+## Multiple time periods DID models 
+```{r}
+# Multiple time periods DID models and plot====
+
+# Inbound 
+GL_DID_0814_AM_inbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                         year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                       data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0814_PM_inbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                         year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                       data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-84 West")))
+
+GL_DID_0814_AM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+
+GL_DID_0814_PM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0814_AM_outbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0814_PM_outbound_I5_I84_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-84 East")))
+
+GL_DID_0814_AM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+
+GL_DID_0814_PM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+```
+
+### Using I-84 as the experimental corridor 
+```{r}
+stargazer(GL_DID_0814_AM_inbound_I5_I84_mt, GL_DID_0814_PM_inbound_I5_I84_mt,  GL_DID_0814_AM_outbound_I5_I84_mt, GL_DID_0814_PM_outbound_I5_I84_mt,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          # covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Using I-84 as the experimental corridor 
+mt_5yd_mx <- matrix(c(rep(1, 6),
+                      rep(1, 6),
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1), nrow=12, byrow=TRUE)
+
+gl_sp_ami_did_mt_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I84_mt)$coefficient[, 1]))
+gl_sp_pmi_did_mt_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I84_mt)$coefficient[, 1]))
+
+gl_sp_amo_did_mt_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I84_mt)$coefficient[, 1]))
+gl_sp_pmo_did_mt_coef_mx_0814_I5_I84 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I84_mt)$coefficient[, 1]))
+
+
+gl_sp_ami_did_mt_df_0814_I5_I84 <- data.frame(AM_PM="AM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_ami_did_mt_coef_mx_0814_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_pmi_did_mt_df_0814_I5_I84 <- data.frame(AM_PM="PM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmi_did_mt_coef_mx_0814_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_amo_did_mt_df_0814_I5_I84 <- data.frame(AM_PM="AM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_amo_did_mt_coef_mx_0814_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_pmo_did_mt_df_0814_I5_I84 <- data.frame(AM_PM="PM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmo_did_mt_coef_mx_0814_I5_I84 %*% mt_5yd_mx))
+
+gl_sp_did_5yd_df_long_0814_I5_I84 <- rbind(gl_sp_ami_did_mt_df_0814_I5_I84, gl_sp_pmi_did_mt_df_0814_I5_I84,
+                                           gl_sp_amo_did_mt_df_0814_I5_I84, gl_sp_pmo_did_mt_df_0814_I5_I84) %>%
+                                     mutate(Group=paste(AM_PM, Direction, sep=" "))
+
+
+gl_p_0814_I5_I84_sp_did_5yd_int_4g <-  ggplot(gl_sp_did_5yd_df_long_0814_I5_I84, aes(x=TreatTime, y=Speed, group=Group, color=Group)) +
+  geom_line() + geom_point() + 
+  # geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
+  # geom_hline(yintercept = c(57.3, 54.1, 73.6, 54.5), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Speed (MPH)") + # ylim(40, 70) +
+  ggtitle("Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) + guides(colour =guide_legend(ncol=2))
+
+gl_p_0814_I5_I84_sp_did_5yd_int_4g
+```
+
+### Using I-205 as the experimental corridor 
+```{r}
+stargazer(GL_DID_0814_AM_inbound_I5_I205_mt, GL_DID_0814_PM_inbound_I5_I205_mt,  GL_DID_0814_AM_outbound_I5_I205_mt, GL_DID_0814_PM_outbound_I5_I205_mt,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          # covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+# Using I-84 as the experimental corridor 
+mt_5yd_mx <- matrix(c(rep(1, 6),
+                      rep(1, 6),
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1), nrow=12, byrow=TRUE)
+
+gl_sp_ami_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmi_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I205_mt)$coefficient[, 1]))
+
+gl_sp_amo_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmo_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I205_mt)$coefficient[, 1]))
+
+
+gl_sp_ami_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="AM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_ami_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmi_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="PM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmi_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_amo_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="AM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_amo_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmo_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="PM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmo_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_did_5yd_df_long_0814_I5_I205 <- rbind(gl_sp_ami_did_mt_df_0814_I5_I205, gl_sp_pmi_did_mt_df_0814_I5_I205,
+                                           gl_sp_amo_did_mt_df_0814_I5_I205, gl_sp_pmo_did_mt_df_0814_I5_I205) %>%
+                                     mutate(Group=paste(AM_PM, Direction, sep=" "))
+
+
+gl_p_0814_I5_I205_sp_did_5yd_int_4g <-  ggplot(gl_sp_did_5yd_df_long_0814_I5_I205, aes(x=TreatTime, y=Speed, group=Group, color=Group)) +
+  geom_line() + geom_point() + 
+  # geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
+  # geom_hline(yintercept = c(57.3, 54.1, 73.6, 54.5), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Speed (MPH)") + # ylim(40, 70) +
+  ggtitle("Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) + guides(colour =guide_legend(ncol=2))
+
+gl_p_0814_I5_I205_sp_did_5yd_int_4g
+```
+
+
+
+
+# 
