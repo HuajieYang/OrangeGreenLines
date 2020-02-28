@@ -715,18 +715,18 @@ grid.arrange(ol_p_bd_alght, gl_p_bd_alght, nrow = 1)
 In summary, the results of these analyses show that there has been a net increase in transit ridership in the experimental corridor after the opening of the Orange Line. ?write more? 
 
 
-
 ## Traffic congestion 
 This study focuses on the impacts on traffic congestion and thus I only examine the changes in travel speed during weekday AM and PM peak periods. The peak periods are consistent with Portland metropolitan area Travel Demand Modeling. The AM peak is 7 to 10 AM, and the PM peak is 4 to 7 PM. 
 
-### Orange Line 
+### Plot
 An important goal of the MAX Orange Line is to relieve traffic congestion on the parallel roadways, and therefore I investigate the impacts on traffic congestion on the SE McLoughlin Blvd. The SE McLoughlin Blvd is almost parallel to the MAX Orange Line and carries very large daily traffic volumes. The impacts are expected to concentrate within the experimental segment of SE McLoughlin Blvd. Shown in Figure ***, the experimental segment is the part within the experimental corridor and the control segment is the part within the control corridor. 
 
-To examine the impact of the Orange Line on traffic congestion, this study examines travel speed and its reliability. First, I Investigate the changes in average speed on experimental and control roadways by peak period (AM and PM peak) and directions (inbound to/outbound from CBD), shown in Figure ***. Before the operation of the MAX Orange Line, the trend of average peak period travel speed on experimental and control roadway segments are the same, which meets the assumption of DID approach. After the operation of the MAX Orange Line, both inbound to CBD and outbound from CBD travel speed on control roadway segment for AM and PM peak periods kept almost constant, while both inbound to and outbound from CBD average peak periods travel speed on the experimental segment overall increased. The growth rate of outbound from CBD speed for AM peak period is largest and followed by inbound to CBD speed for PM peak.
-```{r}
-# Prepare data 
+To examine the impact of the Orange Line on traffic congestion, this study examines travel speed and its reliability. First, I Investigate the changes in average speed on experimental and control roadways by peak period (AM and PM peak) and directions (inbound to/outbound from CBD), shown in Figure \@ref(fig:ol-wdpeak-speed). Before the operation of the MAX Orange Line, the trend of average peak period travel speed on experimental and control roadway segments are the same, which meets the assumption of DID approach. After the operation of the MAX Orange Line, both inbound to CBD and outbound from CBD travel speed on control roadway segment for AM and PM peak periods kept almost constant, while both inbound to and outbound from CBD average peak periods travel speed on the experimental segment overall increased. The growth rate of outbound from CBD speed for AM peak period is largest and followed by inbound to CBD speed for PM peak.
+
+```{r ol-wdpeak-speed, fig.cap="Orange Line Weekday peak periods speed"}
+##### Orange Line 
 # source("code/OL_prepare_data.R")
- load("output/intermediate/data_combined_day_wdpeak.RData")
+ load("~/OrangeGreenLines/output/intermediate/data_combined_day_wdpeak.RData")
 
  data_combined_day_wdpeak <- data_combined_day_wdpeak %>%
                              filter(DDV_his_em_avg > 0)  
@@ -738,9 +738,9 @@ To examine the impact of the Orange Line on traffic congestion, this study exami
                                       Group=ifelse(roadway %in% c("Powell_W", "Powell_E"), "Control (Powell Blvd)", 
                                                                   "Experimental (McLoughlin Blvd)"))
 
-  p_sp_ma_4g <- ggplot(data=data_combined_day_wdpeak_ma, aes(x=date, y=Speed, group=Group, colour=Group)) +
+ ol_p_sp_ma_4g <- ggplot(data=data_combined_day_wdpeak_ma, aes(x=date, y=Speed, group=Group, colour=Group)) +
                   geom_point() + geom_smooth(aes(linetype=Group), colour="yellow", size=0.75) + 
-                  geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) +  ylim(0, 50) + ggtitle("Weekday peak periods speed")+
+                  geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) +  ylim(0, 50) + ggtitle("Orange Line Weekday peak periods speed")+
                   labs(x="Date", y="Speed (mph)") + facet_grid(AM_PM ~ Direction) +
                   theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
                         axis.text = element_text(family="Times",size=8),
@@ -751,27 +751,62 @@ To examine the impact of the Orange Line on traffic congestion, this study exami
                         strip.text = element_text(size = 10)
                   ) 
   
-  p_sp_ma_4g
+ ol_p_sp_ma_4g
+ 
 ```
 
+Figure \@ref(fig:gl-wdpeak-speed)
+```{r gl-wdpeak-speed, fig.cap="Green Line Weekday peak periods speed"}
+##### Green Line 
+load("~/OrangeGreenLines/output/intermediate/GL_DID_0414_I5_I205_I84_bd_df.RData")
+
+roadway_label_df <- data.frame(roadway=c("I-205 North", "I-205 South", "I-5 North", "I-5 South", "I-84 East", "I-84 West"), 
+                               ec_Group=c("Experimental (I-205)", "Experimental (I-205)", "Control (I-5)", 
+                                          "Control (I-5)", "Experimental (I-84)", "Experimental (I-84)")) %>%
+  mutate(roadway=as.character(roadway),
+         ec_Group=as.character(ec_Group))
+
+GL_DID_0814_I5_I205_I84_bd_df <- GL_DID_0414_I5_I205_I84_bd_df %>%
+  filter(date>="2008-09-12") %>%
+  mutate(Direction=ifelse(roadway %in% c("I-5 North", "I-205 North", "I-84 West"), "Inbound to CBD", "Outbound from CBD")) %>%
+  left_join(roadway_label_df)
+
+gl_p_sp_I5_I205_4g <- ggplot(data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway %in% c("I-205 North", "I-205 South", "I-5 North", "I-5 South")), 
+       aes(x=date, y=r_speed, group=ec_Group, colour=ec_Group)) +
+  geom_point() + geom_smooth(aes(linetype=ec_Group), colour="yellow", size=0.75) + 
+  geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3)  + ggtitle("Green Line Weekday peak periods speed") +  ylim(0, 100) + 
+  labs(x="Date", y="Speed (mph)") + facet_grid(AM_PM ~ Direction) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=12),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=12, face="bold"),
+        legend.text=element_text(family="Times",size=10),
+        strip.text = element_text(size = 10)) 
+
+gl_p_sp_I5_I205_4g
+```
+
+### T-test
 Table *** shows the descriptive analysis of speed on control and experimental roadway segments by peak periods and directions. Comparisons are conducted between before and after periods for each case. Of the four experimental comparison cases, average speed increased in three cases, all of which are statistically significant; in the remaining case (PM peak outbound from CBD), average speed decreased by 0.7 mph, which is smaller than the decrease rate (-2.2 mph) of corresponding control case. The results of the descriptive analysis indicate that the MAX Orange Line has had a relief impact on the experimental roadway segment.
 
 
 ```{r}
-# # Calculate average speed and standard deviation 
+# Orange Line 
+# # Calculate average speed and standard deviation
 # data_combined_day_wdpeak_ma %>%
 #               group_by(roadway, AM_PM, before_after) %>%
 #               summarise(Speed_avg=mean(Speed, na.rm=TRUE),
 #                          Speed_sd=sd(Speed, na.rm=TRUE))
 # 
-# # T-test 
-# # Major Arterials 
+# # T-test
+# # Major Arterials
 # # AM Peak period
-# # AM inward CBD: experiment 
+# # AM inward CBD: experiment
 # t.test(data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_N", AM_PM=="AM", before_after==0) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector(),
 #        data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_N", AM_PM=="AM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 # 
-# # AM outward CBD: experiment 
+# # AM outward CBD: experiment
 # t.test(data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_S", AM_PM=="AM", before_after==0) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector(),
 #        data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_S", AM_PM=="AM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 # 
@@ -784,11 +819,11 @@ Table *** shows the descriptive analysis of speed on control and experimental ro
 #        data_combined_day_wdpeak %>% filter(roadway=="Powell_E", AM_PM=="AM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 # 
 # # PM Peak period
-# # PM inward CBD: experiment 
+# # PM inward CBD: experiment
 # t.test(data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_N", AM_PM=="PM", before_after==0) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector(),
 #        data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_N", AM_PM=="PM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 # 
-# # PM outward CBD: experiment 
+# # PM outward CBD: experiment
 # t.test(data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_S", AM_PM=="PM", before_after==0) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector(),
 #        data_combined_day_wdpeak %>% filter(roadway=="McLoughlin_S", AM_PM=="PM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 # 
@@ -800,13 +835,58 @@ Table *** shows the descriptive analysis of speed on control and experimental ro
 # t.test(data_combined_day_wdpeak %>% filter(roadway=="Powell_E", AM_PM=="PM", before_after==0) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector(),
 #        data_combined_day_wdpeak %>% filter(roadway=="Powell_E", AM_PM=="PM", before_after==1) %>% select(AvgSpeed) %>% as.data.frame() %>% as.vector())
 
-# Insert before after table 
+# Insert before after t-test table 
 knitr::include_graphics("Table picture.png")
 ```
 
-A one-group pre-treatment/post-treatment comparison of the experimental roadway segment is weak because it lacks a control group and it may be in doubt to attribute the changes to the operation of the Orange Line. To circumvent this weakness, this study, therefore, utilized a difference-in-difference (DID) approach. The following table shows the results of the DID regression model. Of the four models, compared to the control roadway segment and pre-operation period, the coefficients of DID estimators indicate a significant relative increase in the speed of the experimental roadway in all cases, indicating that the Orange Line has a relief effect on traffic congestion on the experimental segment. The size of impacts is different across the AM/PM peak periods and inbound to/outbound from CBD directions. 
+```{r}
+###### Green Line 
+# # T-test====
+# # Major Arterials
+# # AM Peak period
+# # AM inward CBD: experiment
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 North", AM_PM=="AM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 North", AM_PM=="AM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # AM outward CBD: experiment
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 South", AM_PM=="AM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 South", AM_PM=="AM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # AM inward CBD: control
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 North", AM_PM=="AM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 North", AM_PM=="AM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # AM outward CBD: control
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 South", AM_PM=="AM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 South", AM_PM=="AM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # PM Peak period
+# # PM inward CBD: experiment
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 North", AM_PM=="PM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 North", AM_PM=="PM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # PM outward CBD: experiment
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 South", AM_PM=="PM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-205 South", AM_PM=="PM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # PM inward CBD: control
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 North", AM_PM=="PM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 North", AM_PM=="PM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+# 
+# # PM outward CBD: control
+# t.test(GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 South", AM_PM=="PM", Before_after==0) %>% select(r_speed) %>% as.data.frame() %>% as.vector(),
+#        GL_DID_0814_I5_I205_I84_bd_df %>% filter(roadway=="I-5 South", AM_PM=="PM", Before_after==1) %>% select(r_speed) %>% as.data.frame() %>% as.vector())
+
+# Insert before after t-test table 
+knitr::include_graphics("gl_I205_ttest_table.png")
+```
+
+
+### DID base regression 
+A one-group pre-treatment/post-treatment comparison of the experimental roadway segment is weak because it lacks a control group and it may be in doubt to attribute the changes to the operation of the Orange Line. To circumvent this weakness, this study, therefore, utilized a difference-in-difference (DID) approach. The following table shows the results of the DID regression model. Of the four models, compared to the control roadway segment and pre-operation period, the coefficients of DID estimators indicate a significant relative increase in the speed of the experimental roadway in all cases, indicating that the Orange Line has a relief effect on traffic congestion on the experimental segment. The size of impacts is different across the AM/PM peak periods and inbound to/outbound from CBD directions. 
 
 ```{r}
+##### Orange Line 
 # Base models
 sp_amo_day_ma <- lm(AvgSpeed ~ before_after + ec_group + before_after*ec_group,
                     data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
@@ -828,9 +908,36 @@ stargazer(sp_amo_day_ma, sp_ami_day_ma, sp_pmo_day_ma, sp_pmi_day_ma,
 
 ```
 
-Using the results of the DID models, the following figure displays the changes in average peak period travel speed from before to after (Time = 1) the operation of the Orange Line for both the experimental and control roadway segments by directions and peak periods. The "counterfactual" line shows what might have happened in the absence of the operation of the Orange Line, assuming the change in travel speed on the experimental roadway segment would be the same as the change in travel speed on the control roadway segment. As shown in Figure ***, travel speed on the experimental roadway segment for after period is higher than that in the counterfactual scenario for after period. This reveals that the operation of the Orange Line has had a relief effect on travel speed on the experimental roadway segment.
 
 ```{r}
+##### Green Line 
+# Base DID regression  models 
+# Inbound 
+GL_DID_0814_AM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+GL_DID_0814_PM_inbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                     data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0814_AM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after, 
+                                      data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+GL_DID_0814_PM_outbound_I5_I205 <- lm(r_speed ~ Before_after + Group + Group*Before_after,
+                                      data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+
+# Using I-205 as the experimental corridor 
+stargazer(GL_DID_0814_AM_inbound_I5_I205, GL_DID_0814_PM_inbound_I5_I205,  GL_DID_0814_AM_outbound_I5_I205, GL_DID_0814_PM_outbound_I5_I205,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+```
+
+
+Using the results of the DID models, the following figure displays the changes in average peak period travel speed from before to after (Time = 1) the operation of the Orange Line for both the experimental and control roadway segments by directions and peak periods. The "counterfactual" line shows what might have happened in the absence of the operation of the Orange Line, assuming the change in travel speed on the experimental roadway segment would be the same as the change in travel speed on the control roadway segment. As shown in Figure \@ref(fig:ol-sp-did-base), travel speed on the experimental roadway segment for after period is higher than that in the counterfactual scenario for after period. This reveals that the operation of the Orange Line has had a relief effect on travel speed on the experimental roadway segment.
+
+
+```{r ol-sp-did-base, fig.cap="Orange Line DID base models for weekday peak periods speed"}
+##### Orange Line 
 # Plots 
 # Plot base DID models ====
 # Specify base model matrix 
@@ -883,7 +990,7 @@ sp_did_ma_df_long <- rbind(sp_amo_day_ma_speed_df, sp_ami_day_ma_speed_df, sp_pm
 p_sp_did_ma_4g <-  ggplot(sp_did_ma_df_long, aes(x=Before_after, y=Speed, group=Group)) +
                     geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
                     xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
-                    ggtitle("DID models for weekday peak periods speed") +  facet_grid(AM_PM ~ Direction) + 
+                    ggtitle("Orange Line DID models for weekday peak periods speed") +  facet_grid(AM_PM ~ Direction) + 
                     theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
                           axis.text = element_text(family="Times",size=8),
                           axis.title=element_text(family="Times",size=9),
@@ -897,9 +1004,81 @@ p_sp_did_ma_4g
 ggsave(file="output/plots/OL DID plots/p_sp_did_ma_4g.png", p_sp_did_ma_4g, width=5, heigh=4)
 ```
 
-To investigate the changes in peak periods travel speed over time, DID regression models with multiple time periods are estimated. I creat year dummies for all years (1st year: 09/12/2015 - 09/11/2016; 2nd year: 09/12/2016 - 09/11/2017; 2nd year: 09/12/2017 - 09/11/2018). The following table shows the results of the DID regression models. Of the four models, the coefficients of DID estimators indicate significant relative increase in the speed of the experiment roadway in most cases. Only the DID estimator for the first year PM peak outbound from CBD is negative, but it is not statistically significant. The results reveal that the Orange Line has had a positive impact on average peak periods travel speed on SE McLoughlin Blvd.
+Figure \@ref(fig:gl-sp-did-base)
+
+```{r gl-sp-did-base, fig.cap="Green Line DID base models for weekday peak periods speed"}
+##### Green Line 
+# Plot the DID results with I-84 as the experimental corridor ====
+# Plot 
+# Specify base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+# GL speed base models
+sp_ami_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I205)$coefficient[, 1]))
+sp_pmi_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I205)$coefficient[, 1]))
+sp_amo_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I205)$coefficient[, 1]))
+sp_pmo_day_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I205)$coefficient[, 1]))
+
+sp_did_0814_AM_outbound_I5_I205_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                                                Before_after=rep(c("before", "after"), 3),
+                                                sp_ami_day_0814_I5_I205_speed=as.numeric(sp_ami_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_pmi_day_0814_I5_I205_speed=as.numeric(sp_pmi_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_amo_day_0814_I5_I205_speed=as.numeric(sp_amo_day_coef_mx_0814_I5_I205 %*% bm_mx),
+                                                sp_pmo_day_0814_I5_I205_speed=as.numeric(sp_pmo_day_coef_mx_0814_I5_I205 %*% bm_mx)) 
+
+sp_did_0814_AM_outbound_I5_I205_df$Before_after <- relevel(sp_did_0814_AM_outbound_I5_I205_df$Before_after, "before")
+
+
+sp_ami_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_ami_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Inbound")
+
+sp_pmi_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmi_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Inbound")
+
+sp_amo_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_amo_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="AM peak",
+         Direction="Outbound")
+
+sp_pmo_0814_I5_I205_day_speed_df <- sp_did_0814_AM_outbound_I5_I205_df %>%
+  select(Group, Before_after, Speed=sp_pmo_day_0814_I5_I205_speed) %>%
+  mutate(AM_PM="PM peak",
+         Direction="Outbound")
+
+sp_did_0814_I5_I205_df_long <- rbind(sp_ami_0814_I5_I205_day_speed_df, sp_pmi_0814_I5_I205_day_speed_df, 
+                                    sp_amo_0814_I5_I205_day_speed_df, sp_pmo_0814_I5_I205_day_speed_df)%>%
+  mutate(Scenario=paste(AM_PM, Direction, sep=" "),
+         Before_after=ifelse(Before_after=="after", 1, 0))
+
+# Plot of two peak periods and two directions  
+p_sp_0814_I5_I205_did_4g <-  ggplot(sp_did_0814_I5_I205_df_long, aes(x=Before_after, y=Speed, group=Group)) +
+  geom_line(aes(color=Group)) + geom_point() + ylab("Speed (MPH)") + 
+  xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+  ggtitle("Green Line DID models for weekday peak periods speed") +  facet_grid(AM_PM ~ Direction) + 
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) 
+
+p_sp_0814_I5_I205_did_4g
+```
+
+
+### DID Multiple time periods models 
+To investigate the changes in peak periods travel speed over time, DID regression models with multiple time periods are estimated. I creat year dummies for all years (1st year: 09/12/2015 - 09/11/2016; 2nd year: 09/12/2016 - 09/11/2017; 3rd year: 09/12/2017 - 09/11/2018). The following table shows the results of the DID regression models. Of the four models, the coefficients of DID estimators indicate significant relative increase in the speed of the experiment roadway in most cases. Only the DID estimator for the first year PM peak outbound from CBD is negative, but it is not statistically significant. The results reveal that the Orange Line has had a positive impact on average peak periods travel speed on SE McLoughlin Blvd.
 
 ```{r}
+##### Orange Line 
 # Multiple time periods models 
 sp_amo_day_ma_3yd_int <- lm(AvgSpeed ~  ec_group + year_1st + year_2nd + year_3rd + ec_group*year_1st + ec_group*year_2nd + ec_group*year_3rd, 
                             data=data_combined_day_wdpeak %>% filter(roadway %in% c("McLoughlin_S", "Powell_E"), AM_PM=="AM"))
@@ -918,10 +1097,38 @@ stargazer(sp_amo_day_ma_3yd_int, sp_ami_day_ma_3yd_int, sp_pmo_day_ma_3yd_int, s
           dep.var.labels=c("Travel Speed"),
           type="text", title="Orange Line speed DID with multiple time priods", keep.stat=c("n", "rsq", "adj.rsq", "ser"))
 ```
-
-Using the results of DID models with multiple time periods, the following figure shows predicted average weekday peak periods speed over time. The dashed horizontal lines indicate the average treated impacts of corresponding cases. The line plot reveals the nonlinear effect of the Orange Line on traffic. Overall, the size of the effects increased over time. The size of yearly effects is different for AM/PM peak periods and inbound to and outbound from CBD directions.
-
 ```{r}
+##### Green Line 
+# Multiple time periods DID models
+# Inbound 
+GL_DID_0814_AM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 North", "I-205 North")))
+
+GL_DID_0814_PM_inbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                          year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                        data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 North", "I-205 North")))
+
+# Outbound
+GL_DID_0814_AM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="AM", roadway %in% c("I-5 South", "I-205 South")))
+
+GL_DID_0814_PM_outbound_I5_I205_mt <- lm(r_speed ~ Group + year_1st + year_2nd + year_3rd + year_4th + year_5th + 
+                                           year_1st*Group + year_2nd*Group + year_3rd*Group + year_4th*Group + year_5th*Group, 
+                                         data=GL_DID_0814_I5_I205_I84_bd_df %>% filter(AM_PM=="PM", roadway %in% c("I-5 South", "I-205 South")))
+
+stargazer(GL_DID_0814_AM_inbound_I5_I205_mt, GL_DID_0814_PM_inbound_I5_I205_mt,  GL_DID_0814_AM_outbound_I5_I205_mt, GL_DID_0814_PM_outbound_I5_I205_mt,
+          column.labels = c("AM Inbound", "PM Inbound", "AM Outbound", "PM Outbound"),
+          dep.var.labels=c("Travel Speed"),
+          # covariate.labels=c("Time Period (after = 1)", "Group (experimental group = 1)", "Time Period × Group"),
+          type="text", title="GL Route Travel Speed 09/12/2004-09/12/2014 & I-84 as the experimental corridor", keep.stat=c("n", "rsq", "adj.rsq", "ser"))  
+```
+
+Using the results of DID models with multiple time periods, Figure \@ref(fig:ol-sp-did-mt) shows predicted average weekday peak periods speed over time. The dashed horizontal lines indicate the average treated impacts of corresponding cases. The line plot reveals the nonlinear effect of the Orange Line on traffic. Overall, the size of the effects increased over time. The size of yearly effects is different for AM/PM peak periods and inbound to and outbound from CBD directions.
+
+```{r ol-sp-did-mt, fig.cap="Orange Line DID multiple time periods models for weekday peak periods speed"}
+##### Orange Line 
 # Plot multiple time priods results 
 # plot DID models with three year dummy variables 
 mt_3yd_mx <- matrix(c(rep(1, 4),
@@ -1006,7 +1213,7 @@ p_sp_did_ma_3yd_int_4g <-  ggplot(did_day_ma_3yd_int_df, aes(x=TreatTime, y=Spee
   geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
   geom_hline(yintercept = c(26.9, 35.6, 34.4, 28.0), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
   xlab("Treatment time periods") + ylab("Speed (MPH)") + ylim(20, 40) +
-  ggtitle("Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  ggtitle("Orange Line Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
   theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
         axis.text = element_text(family="Times",size=8),
         axis.title=element_text(family="Times",size=9),
@@ -1020,7 +1227,78 @@ p_sp_did_ma_3yd_int_4g
 ggsave(file="output/plots/OL DID plots/p_sp_did_ma_3yd_int_4g.png", p_sp_did_ma_3yd_int_4g, width=5, heigh=4)
 ```
 
-### Green Line 
+Figure \@ref(fig:gl-sp-did-mt)
+```{r gl-sp-did-mt, fig.cap="Green Line DID multiple time periods models for weekday peak periods speed"}
+##### Green Line 
+# Using I-84 as the experimental corridor 
+mt_5yd_mx <- matrix(c(rep(1, 6),
+                      rep(1, 6),
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1), nrow=12, byrow=TRUE)
+
+gl_sp_ami_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_inbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmi_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_inbound_I5_I205_mt)$coefficient[, 1]))
+
+gl_sp_amo_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_AM_outbound_I5_I205_mt)$coefficient[, 1]))
+gl_sp_pmo_did_mt_coef_mx_0814_I5_I205 <- t(as.matrix(summary(GL_DID_0814_PM_outbound_I5_I205_mt)$coefficient[, 1]))
+
+
+gl_sp_ami_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="AM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_ami_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmi_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="PM peak",
+                                         Direction="Inbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmi_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_amo_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="AM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_amo_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_pmo_did_mt_df_0814_I5_I205 <- data.frame(AM_PM="PM peak",
+                                         Direction="Outbound",
+                                         TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year"), ordered = TRUE, 
+                                                          levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year")),
+                                         Speed=as.numeric(gl_sp_pmo_did_mt_coef_mx_0814_I5_I205 %*% mt_5yd_mx))
+
+gl_sp_did_5yd_df_long_0814_I5_I205 <- rbind(gl_sp_ami_did_mt_df_0814_I5_I205, gl_sp_pmi_did_mt_df_0814_I5_I205,
+                                           gl_sp_amo_did_mt_df_0814_I5_I205, gl_sp_pmo_did_mt_df_0814_I5_I205) %>%
+                                     mutate(Group=paste(AM_PM, Direction, sep=" "))
+
+
+gl_p_0814_I5_I205_sp_did_5yd_int_4g <-  ggplot(gl_sp_did_5yd_df_long_0814_I5_I205, aes(x=TreatTime, y=Speed, group=Group, color=Group)) +
+  geom_line() + geom_point() + 
+  # geom_errorbar(aes(ymin=Speed-1.96*Speed_se, ymax=Speed+1.96*Speed_se, width=.1)) + # , position=position_dodge(0.05)
+  # geom_hline(yintercept = c(57.3, 54.1, 73.6, 54.5), color=c('#999999','#E69F00', "#82E0AA", "#85C1E9"), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Speed (MPH)") + # ylim(40, 70) +
+  ggtitle("Green Line Predicted average weekday peak periods speed") + scale_color_manual(values=c('#999999','#E69F00', "#82E0AA", "#85C1E9")) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=9),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=9, face="bold"),
+        legend.text=element_text(family="Times",size=8)
+  ) + guides(colour =guide_legend(ncol=2))
+
+gl_p_0814_I5_I205_sp_did_5yd_int_4g
+```
+
+
 
 
 
