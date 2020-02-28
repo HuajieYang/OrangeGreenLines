@@ -46,8 +46,8 @@ p_load(dplyr, lubridate, ggplot2, stargazer, stringr, foreign, scales, ggrepel)
 
 load("~/OrangeGreenLines/output/intermediate/ridership_w.RData")
 
-ridership_w <- ridership_w %>%
-               filter(date <= "2018-06-03")
+# ridership_w <- ridership_w %>%
+#               filter(date <= "2018-06-03")
 
 # Use bus stops within corridor (first version of corridor: corridor areas are different in the first and second versions)
 # # Load  experimental and control stops GIS bus stop data ====
@@ -300,7 +300,9 @@ rs_did_df <- rbind(ridership_w_experimental_summary2, ridership_w_control_summar
              mutate(Before_after=ifelse(date >= "2015-09-13", 1, 0),
                     Year_1st=ifelse(date>="2015-09-13" & date <= "2016-06-05", 1, 0),
                     Year_2nd=ifelse(date>="2016-09-04" & date <= "2017-06-04", 1, 0),
-                    Year_3rd=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0))
+                    Year_3rd=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0),
+                    Year_4th=ifelse(date>="2018-09-02" & date <= "2019-03-03", 1, 0)
+                    )
 
 p_bd_ec_cc <- ggplot(rs_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
   geom_point(aes(colour=Group), size=0.75) + 
@@ -323,7 +325,7 @@ p_bd_ec_cc
 rs_did_base <- lm(ONES_SUM ~ Before_after*Group, data=rs_did_df)
 
 # Multiple time periods 
-rs_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Group*Year_2nd + Group*Year_3rd, data=rs_did_df)
+rs_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Group*Year_2nd + Group*Year_3rd + Group*Year_4th, data=rs_did_df)
 
 stargazer(rs_did_base, rs_did_mt, 
           column.labels = c("Base model", "Multiple time priods"),
@@ -365,23 +367,26 @@ p_rs_did_base
 
 
 # plot DID models with three year dummy variables 
-mt_3yd_mx <- matrix(c(rep(1, 4),
-                      rep(1, 4),
-                      0, 1, 0, 0, 
-                      0, 0, 1, 0,
-                      0, 0, 0, 1,
-                      0, 1, 0, 0, 
-                      0, 0, 1, 0,
-                      0, 0, 0, 1), nrow=8, byrow=TRUE)
+mt_4yd_mx <- matrix(c(rep(1, 5),
+                      rep(1, 5),
+                      0, 1, 0, 0, 0,
+                      0, 0, 1, 0, 0,
+                      0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 1,
+                      0, 1, 0, 0, 0,
+                      0, 0, 1, 0, 0,
+                      0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 1), 
+                      nrow=10, byrow=TRUE)
 
 # AM outbound 
 rs_did_mt_coef_mx <- t(as.matrix(summary(rs_did_mt)$coefficient[, 1]))
 rs_did_mt_coef_sesq_mx <- t(as.matrix(summary(rs_did_mt)$coefficient[, 2]))^2
 
-rs_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year"), ordered = TRUE, 
-                                                     levels=c("Before", "1st year", "2nd year", "3rd year")),
-                                    Boardings=as.numeric(rs_did_mt_coef_mx %*% mt_3yd_mx),
-                                    Boardings_se=as.numeric(sqrt(rs_did_mt_coef_sesq_mx %*% mt_3yd_mx)))
+rs_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year"), ordered = TRUE, 
+                                            levels=c("Before", "1st year", "2nd year", "3rd year", "4th year")),
+                           Boardings=as.numeric(rs_did_mt_coef_mx %*% mt_4yd_mx),
+                           Boardings_se=as.numeric(sqrt(rs_did_mt_coef_sesq_mx %*% mt_4yd_mx)))
 
 # Average treated effect: 11744=sum(summary(rs_did_base)$coefficient[,1])
 p_rs_did_mt <-  ggplot(rs_did_mt_df, aes(x=TreatTime, y=Boardings, group=1)) +
@@ -544,7 +549,7 @@ ridership_bus_stops_quarter_mile <- ridership_w %>%
 
 
 ridership_bus_stops_quarter_mile_summary1 <- ridership_bus_stops_quarter_mile %>%
-  filter(!(ROUTE_NUMBER %in% c(2)), date >= "2012-09-02") %>%
+  filter(!(ROUTE_NUMBER %in% c(2)), date >= "2012-09-02") %>% # Route 2  provides ridership from 2018-09-02 to present
   group_by(date) %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE),
             OFFS_SUM=sum(OFFS, na.rm = TRUE))
