@@ -2,7 +2,9 @@
 title: "Corridor_level_paper"
 author: "Huajie Yang"
 date: "1/31/2020"
-output: html_document
+output:
+  bookdown::html_document2: default
+  bookdown::pdf_document2: default
 ---
 
 <style>
@@ -41,15 +43,11 @@ Explain why use travel and travel time reliability.
 ## Transit ridership 
 A net increase in transit ridership is a necessary condition for impacts on traffic congestion, thus I conduct four comparisons to examine the impacts on transit ridership within the experimental corridor. 
 
-
-### Orange Line & Green Line
-First, the first analysis compare average weekday boardings at all bus and rail stops within the experimental and control corridors before and after the operation of the Orange Line. As shown in the Figure ***, the dashed line indicates the date when the Orange Line started operation. After the opening of the Orange Line, boardings within the experimental corridor sharply increased while boardings within the control corridor decreased slightly. Then, I decompose the ridership within the experimental corridor. The average weekday ridership of Orange line is about a little more than 5000. It indicates the majority of increase in ridership is from the Orange Line. These evidences show that the MAX Orange Line has made a contribute to the increased transit ridership. The results show that there is a approximate 7,000 increase in the average weekday boardings. 
-
-?Transfer analysis， get off analysis, analysis the get off at bus stops close the rail stations.? 
-
 ##### average weekday boardings
+First, this study analyzed average weekday boardings at all bus and rail stops within the experimental and control corridors before and after the operation of the new light rail transit. As shown in Figure \@ref(fig:weekday-boarding-plot), the vertical dashed line indicates the date when the new light rail transit lines started operation. After the opening of the new light rail transit lines, boardings within the experimental corridor sharply increased while boardings within the control corridor decreased slightly for the Orange Line and almost kept stable for the Green Line. 
+
 ```{r}
-# Load and organize transit ridership and stop locations data 
+###### Load and organize transit ridership and stop locations data 
 # Extract weekday boardings within the experimental and control corridors 
 # # Transit ridership data ====
 # # Ridership dataset does not provide streetcar ridership 
@@ -80,9 +78,10 @@ First, the first analysis compare average weekday boardings at all bus and rail 
 
 load("~/OrangeGreenLines/output/intermediate/ridership_w.RData")
 
-ridership_w <- ridership_w %>%
-               filter(date <= "2018-06-03")
+# ridership_w <- ridership_w %>%
+#               filter(date <= "2018-06-03")
 
+###### Load Orange Line data 
 # Use bus stops within corridor (first version of corridor: corridor areas are different in the first and second versions)
 # # Load  experimental and control stops GIS bus stop data ====
 # control_busstops <-  read.dbf("data/GIS/Control_Corridor_BusStops.dbf", as.is=TRUE)
@@ -114,49 +113,70 @@ ridership_w <- ridership_w %>%
 
 # Use bus stops within corridor1 (second version of corridor)
 # Load GIS bus stop data of control corridor and experimental corridor 
-control_corridor1_busstops <-  read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Control_corridor1_busstops.dbf", as.is=TRUE) 
-experimental_corridor1_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Experimental_corridor1_busstops.dbf", as.is=TRUE) 
+ol_control_corridor1_busstops <-  read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Control_corridor1_busstops.dbf", as.is=TRUE) 
+ol_experimental_corridor1_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Experimental_corridor1_busstops.dbf", as.is=TRUE) 
 
 # RTE 200 is the MAX Green Line
-control_corridor1_busstops <- control_corridor1_busstops %>%
+ol_control_corridor1_busstops <- ol_control_corridor1_busstops %>%
                     mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
 
 # 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
 # RTE 290 is the MAX Orange Line
-experimental_corridor1_busstops <- experimental_corridor1_busstops %>%
+ol_experimental_corridor1_busstops <- ol_experimental_corridor1_busstops %>%
                           filter(!(RTE %in% c("194", "195", "196"))) %>%
                           mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
 
 # extract ridership of control stops from ridership data 
-ridership_w_rt_control_corridor1 <- ridership_w %>%
-                                      filter(rt_dir_stopdesc %in% control_corridor1_busstops$rt_dir_stopdesc)
+ol_ridership_w_rt_control_corridor1 <- ridership_w %>%
+                                      filter(rt_dir_stopdesc %in% ol_control_corridor1_busstops$rt_dir_stopdesc)
 
 # all rt_dir_stopdesc are available from ridership dataset
 # sort(unique(ridership_w_rt_control_corridor1$rt_dir_stopdesc))==sort(unique(control_corridor1_busstops$rt_dir_stopdesc))
  
-ridership_w_rt_experimental_corridorl <- ridership_w %>%
-                                          filter(rt_dir_stopdesc %in% experimental_corridor1_busstops$rt_dir_stopdesc)
+ol_ridership_w_rt_experimental_corridorl <- ridership_w %>%
+                                          filter(rt_dir_stopdesc %in% ol_experimental_corridor1_busstops$rt_dir_stopdesc)
 
 # There are three stops do not show in riderhship dataset:  "291_0_SE McLoughlin & Park Ave", "33_1_SE Jefferson & Main", "34_1_SE Jefferson & Main" 
 # setdiff(sort(unique(experimental_corridor1_busstops$rt_dir_stopdesc)), sort(unique(ridership_w_rt_experimental_corridorl$rt_dir_stopdesc)))
 
 # Avoid recoding 
 # Use data from Control_corridor1_busstops.dbf & Experimental_corridor1_busstops.dbf
-ridership_w_control <- ridership_w_rt_control_corridor1
-ridership_w_experimental <- ridership_w_rt_experimental_corridorl
+ol_ridership_w_control <- ol_ridership_w_rt_control_corridor1
+ol_ridership_w_experimental <- ol_ridership_w_rt_experimental_corridorl
+
+###### Load Green Line data 
+# Load GIS bus stop data of con and exp corridors 
+gl_exp_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Green Line/Corridor2/GL_segment_main2clackamas_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+gl_con_busstops <- read.dbf("~/OrangeGreenLines/data/GIS/Green Line/Corridor2/I-5_segment_0.5m_buffer_busstops.dbf", as.is=TRUE) 
+
+# 194, 195, 196 are streetcar; no streetcar ridership in ridership dataset
+gl_exp_busstops <- gl_exp_busstops %>%
+                            filter(!(RTE %in% c("194", "195", "196"))) %>%
+                            mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+
+gl_con_busstops <- gl_con_busstops %>%
+                       filter(!(RTE %in% c("194", "195", "196"))) %>%
+                       mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))
+
+gl_ridership_w_exp <- ridership_w %>%
+                      filter(rt_dir_stopdesc %in% gl_exp_busstops$rt_dir_stopdesc)
+
+gl_ridership_w_con <- ridership_w %>%
+                      filter(rt_dir_stopdesc %in% gl_con_busstops$rt_dir_stopdesc)
 ```
 
 ```{r}
+##### Orange Line analysis 
 # Route 2  provides ridership from 2018-09-02 to present
 # 291-Orange Night Bus provides ridership from 2015-09-13 to present 
 # 290 MAX Orange Line provides ridership from 2015-09-13 to present 
-ridership_w_experimental_summary1 <- ridership_w_experimental %>%
+ol_ridership_w_experimental_summary1 <- ol_ridership_w_experimental %>%
                                       filter(date >= "2012-09-02") %>% 
                                       group_by(ROUTE_NUMBER, date) %>%
                                       summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
                                       ungroup()
 
-ridership_w_experimental_summary2 <- ridership_w_experimental %>%
+ol_ridership_w_experimental_summary2 <- ol_ridership_w_experimental %>%
                                       filter(!(ROUTE_NUMBER %in% c(2, 291)), date >= "2012-09-02") %>% 
                                       group_by(date) %>%
                                       summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
@@ -166,72 +186,343 @@ ridership_w_experimental_summary2 <- ridership_w_experimental %>%
 # Route 73 only provide ridership from 2016-09-04 to present 
 # Route 74 only provide ridership form 2018-03-04
 # Ridership of RTE 200 MAX Green Line is from 2012-09-02 to present 
-ridership_w_control_summary1 <- ridership_w_control %>%
+ol_ridership_w_control_summary1 <- ol_ridership_w_control %>%
   filter(date >= "2012-09-02") %>%
   group_by(ROUTE_NUMBER, date) %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
   ungroup() 
 
-ridership_w_control_summary2 <- ridership_w_control %>%
+ol_ridership_w_control_summary2 <- ol_ridership_w_control %>%
   filter(!(ROUTE_NUMBER %in% c(2, 73, 74)), date >= "2012-09-02") %>%
   group_by(date) %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
   ungroup() 
 
 # Orangeize ridership dataframe for DID regression 
-ridership_w_experimental_summary2 <- ridership_w_experimental_summary2 %>%
+ol_ridership_w_experimental_summary2 <- ol_ridership_w_experimental_summary2 %>%
   mutate(Group="Experimental corridor")
 
-ridership_w_control_summary2 <- ridership_w_control_summary2 %>%
+ol_ridership_w_control_summary2 <- ol_ridership_w_control_summary2 %>%
   mutate(Group="Control corridor")
 
-rs_did_df <- rbind(ridership_w_experimental_summary2, ridership_w_control_summary2) %>% 
+ol_rs_did_df <- rbind(ol_ridership_w_experimental_summary2, ol_ridership_w_control_summary2) %>% 
              mutate(Before_after=ifelse(date >= "2015-09-13", 1, 0),
                     Year_1st=ifelse(date>="2015-09-13" & date <= "2016-06-05", 1, 0),
                     Year_2nd=ifelse(date>="2016-09-04" & date <= "2017-06-04", 1, 0),
-                    Year_3rd=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0))
+                    Year_3rd=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0),
+                    Year_4th=ifelse(date>="2018-09-02" & date <= "2019-03-03", 1, 0),
+                    Line="Green Line")
 
-p_bd_ec_cc <- ggplot(rs_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
-  geom_point(aes(colour=Group), size=0.75) + 
-  ggtitle("Boardings at transit stops within \n the experimental/control corridors") +
-  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+###### Green Line analysis 
+# Experimental ridership 
+gl_ridership_w_exp_summary1 <- gl_ridership_w_exp %>%
+                               group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION, date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup()
+
+# Select routes operate all the time 
+# sort(table(gl_ridership_w_exp_summary1$ROUTE_NUMBER))
+# Route 200 is the MAX Green Line
+# Routes start service from 2007-03-04 to present 
+gl_ridership_w_exp_rt <- gl_ridership_w_exp_summary1 %>%
+                          group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION) %>%
+                          summarise(date=min(date), 
+                                    freq=n()) %>%
+                          arrange(freq) %>%
+                          filter(date=="2007-03-04"|ROUTE_NUMBER==200) %>% 
+                          as.data.frame()
+
+# Ridership within the experimental corridor by date 
+gl_ridership_w_exp_summary2 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_exp_rt$ROUTE_NUMBER) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="Experimental corridor")
+
+# Control ridership 
+gl_ridership_w_con_summary1 <- gl_ridership_w_con %>%
+                                group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION, date) %>%
+                                summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                                ungroup()
+
+# Select routes that operate all the time 
+# sort(table(gl_ridership_w_con_summary1$ROUTE_NUMBER))
+# Route 200 is the MAX Green Line
+# Routes start service from 2007-03-04 to present 
+gl_ridership_w_con_rt <- gl_ridership_w_con_summary1 %>%
+                          group_by(ROUTE_NUMBER, PUBLIC_ROUTE_DESCRIPTION) %>%
+                          summarise(date=min(date), 
+                                    freq=n()) %>%
+                          arrange(freq) %>%
+                          filter(date=="2007-03-04") %>% #
+                          as.data.frame()
+
+gl_ridership_w_con_summary2 <- gl_ridership_w_con %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_con_rt$ROUTE_NUMBER) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="Control corridor")
+
+gl_bd_did_df <- rbind(gl_ridership_w_exp_summary2, gl_ridership_w_con_summary2) %>% 
+                mutate(Before_after=ifelse(date >= "2009-09-13", 1, 0),
+                       Year_1st=ifelse(date>="2009-09-13" & date <= "2010-06-06", 1, 0),
+                       Year_2nd=ifelse(date>="2010-09-05" & date <= "2011-06-05", 1, 0),
+                       Year_3rd=ifelse(date>="2011-09-04" & date <= "2012-06-03", 1, 0),
+                       Year_4th=ifelse(date>="2012-09-02" & date <= "2013-06-02", 1, 0),
+                       Year_5th=ifelse(date>="2013-09-01" & date <= "2014-06-01", 1, 0),
+                       Year_6th=ifelse(date>="2014-08-31" & date <= "2015-06-07", 1, 0),
+                       Year_7th=ifelse(date>="2015-09-13" & date <= "2016-06-05", 1, 0),
+                       Year_8th=ifelse(date>="2016-09-04" & date <= "2017-06-04", 1, 0),
+                       Year_9th=ifelse(date>="2017-09-03" & date <= "2018-06-03", 1, 0),
+                       Year_10th=ifelse(date>="2018-09-02" & date <= "2019-03-03", 1, 0),
+                       Line="Green Line"
+                       )
+```
+
+
+```{r weekday-boarding-plot, fig.cap="Boardings at transit stops within \n the experimental/control corridors."}
+# Reference: https://bookdown.org/yihui/rmarkdown-cookbook/cross-ref.html#cross-ref
+ol_p_bd_ec_cc <- ggplot(ol_rs_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+  geom_point(aes(colour=Group), size=0.75) +
+ ggtitle("Orange Line") + # "Boardings at transit stops within \n the experimental/control corridors"
+  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) +
   theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
         axis.text = element_text(family="Times",size=8),
         axis.title=element_text(family="Times",size=10),
-        legend.position="bottom",
+        legend.position=c(0.35, 0.15),
         legend.title=element_text(family="Times",size=10, face="bold"),
-        legend.text=element_text(family="Times",size=10)) + ylim(3000, 17000)
-p_bd_ec_cc
+        legend.text=element_text(family="Times",size=10)) + ylim(1000, 15000)
+
+gl_p_bd_ec_cc <- ggplot(gl_bd_did_df, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+                  geom_point(aes(colour=Group), size=0.75) +
+                  ggtitle("Green Line") +
+                  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) +
+                  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                        axis.text = element_text(family="Times",size=8),
+                        axis.title=element_text(family="Times",size=10),
+                        legend.position="none",
+                        legend.title=element_text(family="Times",size=10, face="bold"),
+                        legend.text=element_text(family="Times",size=10)) + ylim(1000, 15000)
+
+grid.arrange(ol_p_bd_ec_cc, gl_p_bd_ec_cc, nrow = 1)
 ```
 
+###### DID analysis 
 ```{r}
+##### Orange Line 
+# Base model 
+ol_rs_did_base <- lm(ONES_SUM ~ Before_after*Group, data=ol_rs_did_df)
+
+# Multiple time periods 
+ol_rs_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Group*Year_2nd + Group*Year_3rd + Year_4th*Group, data=ol_rs_did_df)
+
+##### Green Line 
+# Green Line boarding did base model 
+gl_bd_did_base <- lm(ONES_SUM ~ Before_after*Group, data=gl_bd_did_df)
+
+# Multiple time periods 
+gl_bd_did_mt <- lm(ONES_SUM ~ Group*Year_1st + Year_2nd*Group + Year_3rd*Group +
+                              Year_4th*Group + Year_5th*Group + Year_6th*Group +
+                              Year_7th*Group + Year_8th*Group + Year_9th*Group +
+                              Year_10th*Group, data=gl_bd_did_df)
+
+stargazer(ol_rs_did_base, gl_bd_did_base, ol_rs_did_mt, gl_bd_did_mt, 
+          column.labels = c("Orage Line", "Green Line", "Orage Line", "Green Line"),
+          dep.var.labels=c("Boardings"),
+          type="text", title="Ridership DID base and multiple time priods models", keep.stat=c("n", "rsq", "adj.rsq", "ser"))
+
+```
+
+Difference-in-Differences effects shown in Figure \@ref(fig:difference-in-differences-effects-boardings) 
+
+```{r difference-in-differences-effects-boardings, fig.cap="Difference-in-Differences effects of boardings"}
+# Plots of base models 
+# Base model matrix 
+bm_mx <- matrix(c(1, 1, 1, 1, 1, 1,
+                  0, 1, 0, 1, 0, 1,
+                  0, 0, 1, 1, 1, 1, 
+                  0, 0, 0, 1, 0, 0), nrow=4, byrow=TRUE)
+
+##### Orange Line 
+# major arterial speed base models
+ol_rs_did_base_coef_mx <- t(as.matrix(summary(ol_rs_did_base)$coefficient[, 1]))
+
+
+ol_rs_did_base_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                             Before_after=rep(c("before", "after"), 3),
+                             boardings=as.numeric(ol_rs_did_base_coef_mx %*% bm_mx)) %>%
+                  mutate(Before_after=ifelse(Before_after=="after", 1, 0)) 
+
+ol_p_rs_did_base <-  ggplot(ol_rs_did_base_df, aes(x=Before_after, y=boardings, group=Group)) +
+                    geom_line(aes(color=Group)) + geom_point() + ylab("Boardings") + 
+                    xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+                    ggtitle("Orange Line") + 
+                    theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+                          axis.text = element_text(family="Times",size=8),
+                          axis.title=element_text(family="Times",size=12),
+                          legend.position="none",
+                          legend.title=element_text(family="Times",size=12, face="bold"),
+                          legend.text=element_text(family="Times",size=8)) 
+
+
+##### Green Line
+# major arterial speed base models
+gl_bd_did_base_coef_mx <- t(as.matrix(summary(gl_bd_did_base)$coefficient[, 1]))
+
+gl_bd_did_base_df <- data.frame(Group=rep(c("Control", "Treated", "Counterfactual"), each=2), 
+                             Before_after=rep(c("before", "after"), 3),
+                             boardings=as.numeric(gl_bd_did_base_coef_mx %*% bm_mx)) %>%
+                     mutate(Before_after=ifelse(Before_after=="after", 1, 0)) 
+
+gl_p_bd_did_base <-  ggplot(gl_bd_did_base_df, aes(x=Before_after, y=boardings, group=Group)) +
+                        geom_line(aes(color=Group)) + geom_point() + ylab("Boardings") + 
+                        xlab("Time (after=1)")  + scale_x_continuous(breaks=c(0, 1)) + 
+                        ggtitle("Green Line") + 
+                        theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+                              axis.text = element_text(family="Times",size=8),
+                              axis.title=element_text(family="Times",size=12),
+                              legend.position=c(0.25, 0.75),
+                              legend.title=element_text(family="Times",size=12, face="bold"),
+                              legend.text=element_text(family="Times",size=8)) 
+
+grid.arrange(ol_p_rs_did_base, gl_p_bd_did_base, nrow = 1)
+```
+
+Figure \@ref(fig:predicted-average-boardings)
+
+```{r predicted-average-boardings, fig.cap="Predicted average boardings within the experimental/control corridors."}
+# Plots of models with multiple time periods 
+##### Orange Line
+mt_4yd_mx <- matrix(c(rep(1, 5),
+                      rep(1, 5),
+                      0, 1, 0, 0, 0,
+                      0, 0, 1, 0, 0,
+                      0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 1,
+                      0, 1, 0, 0, 0,
+                      0, 0, 1, 0, 0,
+                      0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 1), 
+                      nrow=10, byrow=TRUE)
+
+# AM outbound 
+ol_rs_did_mt_coef_mx <- t(as.matrix(summary(ol_rs_did_mt)$coefficient[, 1]))
+ol_rs_did_mt_coef_sesq_mx <- t(as.matrix(summary(ol_rs_did_mt)$coefficient[, 2]))^2
+
+ol_rs_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year"), ordered = TRUE, 
+                                            levels=c("Before", "1st year", "2nd year", "3rd year", "4th year")),
+                           Boardings=as.numeric(ol_rs_did_mt_coef_mx %*% mt_4yd_mx),
+                           Boardings_se=as.numeric(sqrt(ol_rs_did_mt_coef_sesq_mx %*% mt_4yd_mx)))
+
+# Average treated effect: 11744=sum(summary(rs_did_base)$coefficient[,1])
+ol_p_rs_did_mt <-  ggplot(ol_rs_did_mt_df, aes(x=TreatTime, y=Boardings, group=1)) +
+  geom_line() + geom_point() + 
+  geom_errorbar(aes(ymin=Boardings-1.96*Boardings_se, ymax=Boardings+1.96*Boardings_se, width=.1)) + # , position=position_dodge(0.05)
+  geom_hline(yintercept = c(11744), color=c('#999999'), linetype="dashed")+
+  xlab("Treatment time periods") + ylab("Boardings") + # ylim(25, 30) +
+  ggtitle("Orange Line") + scale_color_manual(values=c('#999999')) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=12),
+        legend.position="bottom",
+        legend.title=element_text(family="Times",size=12, face="bold"),
+        legend.text=element_text(family="Times",size=8)) 
+
+
+##### Green Line
+# Plot for DID with multiple time periods 
+# plot DID models with three year dummy variables 
+mt_10yd_mx <- matrix(c(rep(1, 11),
+                      rep(1, 11),
+                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                      
+                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+                      nrow=22, byrow=TRUE)
+
+gl_bd_did_mt_coef_mx <- t(as.matrix(summary(gl_bd_did_mt)$coefficient[, 1]))
+gl_bd_did_mt_coef_sesq_mx <- t(as.matrix(summary(gl_bd_did_mt)$coefficient[, 2]))^2
+
+gl_bd_did_mt_df <- data.frame(TreatTime=factor(c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year", "6th year",
+                                              "7th year", "8th year", "9th year", "10th year"), ordered = TRUE, 
+                                            levels=c("Before", "1st year", "2nd year", "3rd year", "4th year", "5th year", "6th year",
+                                                     "7th year", "8th year", "9th year", "10th year")),
+                           Boardings=as.numeric(gl_bd_did_mt_coef_mx %*% mt_10yd_mx),
+                           Boardings_se=as.numeric(sqrt(gl_bd_did_mt_coef_sesq_mx %*% mt_10yd_mx))
+                           )
+
+# Average treated effect: 10018=sum(summary(gl_bd_did_base)$coefficient[,1])
+gl_p_bd_did_mt <-  ggplot(gl_bd_did_mt_df, aes(x=TreatTime, y=Boardings, group=1)) +
+        geom_line() + geom_point() + 
+        geom_errorbar(aes(ymin=Boardings-1.96*Boardings_se, ymax=Boardings+1.96*Boardings_se, width=.1)) + # , position=position_dodge(0.05)
+        geom_hline(yintercept = c(10018), color=c('#999999'), linetype="dashed")+
+        xlab("Treatment time periods") + ylab("Boardings") + # ylim(25, 30) +
+        ggtitle("Green Line") + scale_color_manual(values=c('#999999')) +
+        theme(plot.title = element_text(family="Times",hjust = 0.5, size=12, face="bold"),
+              axis.text = element_text(family="Times",size=8),
+              axis.title=element_text(family="Times",size=12),
+              legend.position="bottom",
+              legend.title=element_text(family="Times",size=12, face="bold"),
+              legend.text=element_text(family="Times",size=8)) 
+
+
+grid.arrange(ol_p_rs_did_mt, gl_p_bd_did_mt, nrow = 1)
+```
+
+
+
+Then, I divide the ridership within the experimental corridor into new light rail transit and existing transit. Shown in Figure \@ref(fig:boardings-NewTransitLine-ExistingTransit).The average weekday ridership of Orange line and Green Line exceeded 5000 and 6000 respectively, while the ridership of the existing transit was relative stable after the operation of the new light rail transit lines. Most of the increase in ridership is from the new light rail transit, indicating that the new light rail transit has contributed to the increased transit ridership. 
+```{r boardings-NewTransitLine-ExistingTransit, fig.cap="Boardings at MAX Orange Line and exisitng transit stops within experimental corridor"}
+##### Orage Line 
 # ridership of Orange Line and Existing transit data.frame 
-ridership_w_experimental_summary3 <- ridership_w_experimental %>%
+# Route 2  provides ridership from 2018-09-02 to present
+# 291-Orange Night Bus provides ridership from 2015-09-13 to present 
+# 290 MAX Orange Line provides ridership from 2015-09-13 to present 
+ol_ridership_w_experimental_summary3 <- ol_ridership_w_experimental %>%
                                       filter(ROUTE_NUMBER %in% c(290)) %>% # Route 290 MAX Orange Line  
                                       group_by(date) %>%
                                       summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
                                       ungroup() 
 
-ridership_w_experimental_summary3 <- ridership_w_experimental_summary3 %>%
-                                     mutate(Group="MAX Orange Line")
+ol_ridership_w_experimental_summary3 <- ol_ridership_w_experimental_summary3 %>%
+                                        mutate(Group="MAX Orange Line")
 
 # Existing bus ridership within experimental corridor 
-ridership_w_experimental_summary4 <- ridership_w_experimental %>%
+ol_ridership_w_experimental_summary4 <- ol_ridership_w_experimental %>%
                                       filter(!(ROUTE_NUMBER %in% c(2, 290, 291)), date >= "2012-09-02") %>% 
                                       group_by(date) %>%
                                       summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
                                       ungroup()
 
-ridership_w_experimental_summary4 <- ridership_w_experimental_summary4 %>%
+ol_ridership_w_experimental_summary4 <- ol_ridership_w_experimental_summary4 %>%
                                      mutate(Group="Existing Transit")
 
-rs_ol_et <- rbind(ridership_w_experimental_summary3, ridership_w_experimental_summary4)
+ol_rs_ol_et <- rbind(ol_ridership_w_experimental_summary3, ol_ridership_w_experimental_summary4)
 
 # plot of ridership of MAX Orange Line and Exisitng transit data.frame 
-p_rs_ol_et <- ggplot(rs_ol_et, aes(date, ONES_SUM, color=Group), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+ol_p_rs_ol_et <- ggplot(ol_rs_ol_et, aes(date, ONES_SUM, color=Group), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
   geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
-  ggtitle("Boardings at MAX Orange Line and exisitng transit \n stops within experimental corridor") +
-  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + ylim(4000, 7000) +
+  ggtitle("Orange Line") +
+  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + ylim(1000, 7000) +
   theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
         axis.text = element_text(family="Times",size=8),
         axis.title=element_text(family="Times",size=9),
@@ -239,15 +530,52 @@ p_rs_ol_et <- ggplot(rs_ol_et, aes(date, ONES_SUM, color=Group), group=Group) + 
         legend.title=element_text(family="Times",size=9, face="bold"),
         legend.text=element_text(family="Times",size=10))  
 
-p_rs_ol_et
+# ol_p_rs_ol_et
+
+##### Green Line
+# MAX Green Line ridership by date 
+gl_ridership_w_exp_summary3 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER == 200) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup() %>%
+                               mutate(Group="MAX Green Line")
+
+# Existing transit service ridership within the experimental corridor 
+gl_ridership_w_exp_summary4 <- gl_ridership_w_exp %>%
+                               filter(ROUTE_NUMBER %in% gl_ridership_w_exp_rt$ROUTE_NUMBER, ROUTE_NUMBER != 200) %>%
+                               group_by(date) %>%
+                               summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
+                               ungroup()  %>%
+                               mutate(Group="Existing Transit")
+
+gl_bd_gl_et <- rbind(gl_ridership_w_exp_summary3, gl_ridership_w_exp_summary4)
+
+# plot of ridership of MAX Orange Line and Exisitng transit data.frame 
+gl_p_bd_gl_et <- ggplot(gl_bd_gl_et, aes(date, ONES_SUM, color=Group), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+        geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
+        ggtitle("Green Line") +
+        labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + ylim(1000, 7000) +
+        theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+              axis.text = element_text(family="Times",size=8),
+              axis.title=element_text(family="Times",size=9),
+              legend.position="bottom",
+              legend.title=element_text(family="Times",size=9, face="bold"),
+              legend.text=element_text(family="Times",size=10))  
+
+# gl_p_bd_gl_et
+
+grid.arrange(ol_p_rs_ol_et, gl_p_bd_gl_et, nrow = 1)
 ```
 
 ##### Traverse bus lines 
-Then, this study compares ridership of bus lines that run through the the experimental and control corridors. In the experimental corridor, these lines connect the southeast Portland with downtown Portland and therefore provide alternative option to the Orange Line. Shown in the Figure ***, these lines cross the screenlines. Results show that total bidirectional ridership at all stations of these lines within experimental corridor decreased at a larger rate compared to corresponding bus lines within the control corridor after the operation of the Orange Line. The results seems to indicate that a small portion of increase in transit ridership switch form the existing bus service. 
+Then, this study compares ridership of bus lines that run through the the experimental and control corridors. In the experimental corridor, these lines connect the southeast Portland with downtown Portland and therefore provide alternative option to the Orange Line. Shown in the Figure \@ref(fig:OL-travers-bl-bd), these lines cross the screenlines. Results show that total bidirectional ridership at all stations of these lines within experimental corridor decreased at a larger rate compared to corresponding bus lines within the control corridor after the operation of the Orange Line. The results seems to indicate that a small portion of increase in transit ridership switch form the existing bus service. 
 
-```{r}
-# Routes 19, 30, 70, 291 cross the screenline  
-ridership_experimental2  <- ridership_w %>% 
+```{r OL-travers-bl-bd, fig.cap="Boardings of traverse bus lines within the experimental/control corridors"}
+##### Orange Line 
+# Routes 19, 30, 70, 291 cross the screenline 
+# Orange Line traverse bus lines ridership within the experimental corridor 
+ol_tbl_bd_experimental2  <- ridership_w %>% 
   filter(ROUTE_NUMBER %in% c(19, 30, 70, 291), date >= "2012-09-02")  %>% 
   group_by(date)  %>% 
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
@@ -264,7 +592,7 @@ ridership_experimental2  <- ridership_w %>%
 # 200 MAX Green Line 
 
 # East-west route 9, 17 cross the screenliens 
-ridership_control  <- ridership_w %>% 
+ol_tbl_bd_control  <- ridership_w %>% 
   filter(ROUTE_NUMBER %in% c(9, 17), date >= "2012-09-02")  %>% 
   group_by(date)  %>% 
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE)) %>%
@@ -274,26 +602,26 @@ ridership_control  <- ridership_w %>%
 # ggplot(ridership_control, aes(date, ONES_SUM)) + geom_point() + geom_smooth() + ylim (11000, 20000) +
 #  ggtitle("average total weekday ridership of east–west \n transit lines within the control corridor")
 
-buslines_exp_con <- rbind(ridership_experimental2, ridership_control)
+ol_tbl_bd_exp_con <- rbind(ol_tbl_bd_experimental2, ol_tbl_bd_control)
 
-ggplot(buslines_exp_con, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
-  geom_point(aes(colour=Group), size=0.75) + 
-  ggtitle("Boardings of traverse bus lines within \n the experimental/control corridors") +
-  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
-  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
-        axis.text = element_text(family="Times",size=8),
-        axis.title=element_text(family="Times",size=10),
-        legend.position="bottom",
-        legend.title=element_text(family="Times",size=10, face="bold"),
-        legend.text=element_text(family="Times",size=10)) # + ylim(3000, 17000)
+ol_p_tbl_bd <- ggplot(ol_tbl_bd_exp_con, aes(date, ONES_SUM), group=Group) + geom_smooth(aes(linetype=Group), color="#909497") +
+                  geom_point(aes(colour=Group), size=0.75) + 
+                  ggtitle("Orange Line") +
+                  labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+                  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+                        axis.text = element_text(family="Times",size=8),
+                        axis.title=element_text(family="Times",size=10),
+                        legend.position="bottom",
+                        legend.title=element_text(family="Times",size=10, face="bold"),
+                        legend.text=element_text(family="Times",size=10)) # + ylim(3000, 17000)
+
 
 ```
 
 ##### Ridership of traverse bus lines during peak periods 
-Only drivers switching from driving to transit during peak periods can relieve traffic congestion, I analyzed the weekday peak-period bidirectional ridership of the Orange Line and existing bus lines that traverse the same screenline. Shown in the Figure ***, ridership of the existing parallel bus lines decreased slightly while the ridership of the Orange Line is much larger than the decreased ridership of the existing parallel bus lines. The combined effect shows that there is an overall increase in transit ridership within the experimental corridor. 
+Only drivers switching from driving to transit during peak periods can relieve traffic congestion, I analyzed the weekday peak-period bidirectional ridership of the Orange Line and existing bus lines that traverse the same screenline. Shown in the Figure \@ref(fig:OL-travers-bl-bd-pp), ridership of the existing parallel bus lines decreased slightly while the ridership of the Orange Line is much larger than the decreased ridership of the existing parallel bus lines. The combined effect shows that there is an overall increase in transit ridership within the experimental corridor. 
 
-```{r}
-
+```{r OL-travers-bl-bd-pp, fig.cap="Peak periods bidirectional boardings of MAX \n Orange Line and traverse bus lines"}
 ridership_rt_experimental_peak2  <-  ridership_w %>% 
   filter(ROUTE_NUMBER %in% c(19, 30, 70, 290, 291), date >= "2012-09-02", AM_PM_Peak=="Peak Periods")  %>% 
   mutate(Transit=ifelse(ROUTE_NUMBER==290, "MAX Orange Line", "Existing parallel bus lines"))  %>% 
@@ -303,7 +631,7 @@ ridership_rt_experimental_peak2  <-  ridership_w %>%
 
  ggplot(ridership_rt_experimental_peak2, aes(date, ONES_SUM, color=Transit), group=Transit) +       geom_smooth(aes(linetype=Transit), color="#909497") +
                   geom_point(size=0.75) + scale_color_manual(values=c("#A569BD", "#F8C471")) + 
-                  ggtitle("Peak periods bidirectional boardings of MAX \n Orange Line and traverse bus lines") +
+                  ggtitle("Orange Line") +
                   labs(x="Date", y="Boardings") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
                   theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
                         axis.text = element_text(family="Times",size=8),
@@ -313,40 +641,76 @@ ridership_rt_experimental_peak2  <-  ridership_w %>%
                         legend.text=element_text(family="Times",size=10))  #+ ylim(4000, 14000) 
 ```
 
-##### Boardings and alightings at specific bus stops within a quarter-mile walking radius of MAX Orange Line stations.
-Lastly, I compared boardings and alightings at bus stops that are within a quarter-mile network distance of Orange Line stops before and after the operation of the Orange Line. Shown in the Figure ***, boardings and alightings both largely increased after the operation of the Orange Line. Due to the limitation of data, it is hard to figure out whether such increases result from new ridership or a switch from the existing riderhship. 
+##### Boardings and alightings at specific bus stops within a quarter-mile network distance of MAX Orange Line stations.
+Lastly, I compared boardings and alightings at bus stops that are within a quarter-mile network distance of Orange Line stops before and after the operation of the Orange Line. Shown in the Figure \@ref(fig:p-bd-alght), boardings and alightings both largely increased after the operation of the new light rail transit lines. Due to the limitation of data, it is hard to figure out whether such increases result from new ridership or a switch from the existing riderhship. 
 
-```{r}
-bus_stops_quarter_mile <-  read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Bus_stops_quarter_mile_withoutMAX_SC.dbf", as.is=TRUE) 
+```{r p-bd-alght, fig.cap="Boardings at specific bus stops within a quarter-mile walking radius of new light rail transit stations"}
+###### Orange Line 
+ol_bus_stops_quarter_mile <- read.dbf("~/OrangeGreenLines/data/GIS/Orange Line/Bus_stops_quarter_mile_withoutMAX_SC.dbf", as.is=TRUE) 
 
-bus_stops_quarter_mile <- bus_stops_quarter_mile %>%
-  mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))  %>%
-  select(RTE, DIR, LOCATION,  rt_dir_stopdesc) # , join_STATI
+ol_bus_stops_quarter_mile <- ol_bus_stops_quarter_mile %>%
+                              mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))  %>%
+                              select(RTE, DIR, LOCATION,  rt_dir_stopdesc) # , join_STATI
 
-ridership_bus_stops_quarter_mile <- ridership_w %>%
-  filter(rt_dir_stopdesc %in% bus_stops_quarter_mile$rt_dir_stopdesc) %>%
-  left_join(bus_stops_quarter_mile)  
+ol_ridership_bus_stops_quarter_mile <- ridership_w %>%
+  filter(rt_dir_stopdesc %in% ol_bus_stops_quarter_mile$rt_dir_stopdesc) %>%
+  left_join(ol_bus_stops_quarter_mile)  
 
 
-ridership_bus_stops_quarter_mile_summary1 <- ridership_bus_stops_quarter_mile %>%
-  filter(!(ROUTE_NUMBER %in% c(2)), date >= "2012-09-02") %>%
+ol_ridership_bus_stops_quarter_mile_summary1 <- ol_ridership_bus_stops_quarter_mile %>%
+  filter(!(ROUTE_NUMBER %in% c(2)), date >= "2012-09-02") %>% # Route 2 provides ridership from 2018-09-02 to present
   group_by(date) %>%
   summarise(ONES_SUM=sum(ONS, na.rm = TRUE),
             OFFS_SUM=sum(OFFS, na.rm = TRUE))
 
-ridership_bus_stops_quarter_mile_summary1_long <- gather(ridership_bus_stops_quarter_mile_summary1, Ridership, Amount, ONES_SUM:OFFS_SUM, factor_key=TRUE) %>%
+ol_ridership_bus_stops_quarter_mile_summary1_long <- gather(ol_ridership_bus_stops_quarter_mile_summary1, Ridership, Amount, ONES_SUM:OFFS_SUM, factor_key=TRUE) %>%
                                                   mutate(Ridership=ifelse(Ridership=="ONES_SUM", "Boardings", "Alightings"))
 
-ggplot(ridership_bus_stops_quarter_mile_summary1_long, aes(date, Amount, color=Ridership), group=Ridership) + geom_smooth() + 
-  geom_point(size=0.75) +ggtitle("Boardings and alightings at bus stops within a quarter-mile \n network distance of MAX Orange Line stations") +
-  labs(x="Date", y="Amount") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + 
+ol_p_bd_alght <- ggplot(ol_ridership_bus_stops_quarter_mile_summary1_long, aes(date, Amount, color=Ridership), group=Ridership) + geom_smooth() + 
+  geom_point(size=0.75) +ggtitle("Orange Line") +
+  labs(x="Date", y="Amount") + geom_vline(xintercept=ymd("2015-09-12"), linetype='dashed', size=0.3) + ylim(0, 3000) + 
   theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
         axis.text = element_text(family="Times",size=8),
         axis.title=element_text(family="Times",size=10),
-        legend.position="bottom",
+        legend.position="none",
         legend.title=element_text(family="Times",size=10, face="bold"),
         legend.text=element_text(family="Times",size=8)) 
+
+###### Green Line
+# Green Line boarding and alighting analysis 
+gl_bus_stops_quarter_mile <-  read.dbf("~/OrangeGreenLines/data/GIS/Green Line/Corridor2/GL_service_area_402meters_bus_stops_withoutMAXStations.dbf", as.is=TRUE) 
+
+
+gl_bus_stops_quarter_mile <- gl_bus_stops_quarter_mile %>%
+                              mutate(rt_dir_stopdesc=paste(RTE, DIR, LOCATION, sep="_"))  %>%
+                              select(RTE, DIR, LOCATION,  rt_dir_stopdesc) # , join_STATI
+
+gl_ridership_bus_stops_quarter_mile <- ridership_w %>%
+                                        filter(rt_dir_stopdesc %in% gl_bus_stops_quarter_mile$rt_dir_stopdesc) %>%
+                                        left_join(gl_bus_stops_quarter_mile)  
+
+gl_ridership_bus_stops_quarter_mile_summary1 <- gl_ridership_bus_stops_quarter_mile %>%
+                                                filter(ROUTE_NUMBER %in% gl_ridership_w_exp_rt$ROUTE_NUMBER) %>% # Select Routes that start service from 2007-03-04 to present
+                                                group_by(date) %>%
+                                                summarise(ONES_SUM=sum(ONS, na.rm = TRUE),
+                                                          OFFS_SUM=sum(OFFS, na.rm = TRUE))
+
+gl_ridership_bus_stops_quarter_mile_summary1_long <- gather(gl_ridership_bus_stops_quarter_mile_summary1, Ridership, Amount, ONES_SUM:OFFS_SUM, factor_key=TRUE) %>%
+  mutate(Ridership=ifelse(Ridership=="ONES_SUM", "Boardings", "Alightings"))
+
+gl_p_bd_alght <- ggplot(gl_ridership_bus_stops_quarter_mile_summary1_long, aes(date, Amount, color=Ridership), group=Ridership) + geom_smooth() + 
+  geom_point(size=0.75) +ggtitle("Green Line") +
+  labs(x="Date", y="Amount") + geom_vline(xintercept=ymd("2009-09-12"), linetype='dashed', size=0.3) + ylim(0, 3000) +
+  theme(plot.title = element_text(family="Times",hjust = 0.5, size=10, face="bold"),
+        axis.text = element_text(family="Times",size=8),
+        axis.title=element_text(family="Times",size=10),
+        legend.position=c(0.8, 0.1),
+        legend.title=element_text(family="Times",size=10, face="bold"),
+        legend.text=element_text(family="Times",size=8)) 
+
+grid.arrange(ol_p_bd_alght, gl_p_bd_alght, nrow = 1)
 ```
+
 
 In summary, the results of these analyses show that there has been a net increase in transit ridership in the experimental corridor after the opening of the Orange Line. ?write more? 
 
@@ -389,7 +753,6 @@ To examine the impact of the Orange Line on traffic congestion, this study exami
   
   p_sp_ma_4g
 ```
-
 
 Table *** shows the descriptive analysis of speed on control and experimental roadway segments by peak periods and directions. Comparisons are conducted between before and after periods for each case. Of the four experimental comparison cases, average speed increased in three cases, all of which are statistically significant; in the remaining case (PM peak outbound from CBD), average speed decreased by 0.7 mph, which is smaller than the decrease rate (-2.2 mph) of corresponding control case. The results of the descriptive analysis indicate that the MAX Orange Line has had a relief impact on the experimental roadway segment.
 
